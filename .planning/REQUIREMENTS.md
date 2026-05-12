@@ -181,17 +181,117 @@ Deferred. Tracked but not in current roadmap.
 
 ## Traceability
 
-Updated during roadmap creation.
+Populated by gsd-roadmapper on 2026-05-13.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Populated by gsd-roadmapper) | | |
+| TRANSPORT-01 | Phase 1 | Pending |
+| TRANSPORT-02 | Phase 1 | Pending |
+| TRANSPORT-03 | Phase 1 | Pending |
+| TRANSPORT-04 | Phase 1 | Pending |
+| TRANSPORT-05 | Phase 1 | Pending |
+| TRANSPORT-06 | Phase 1 | Pending |
+| DISC-01 | Phase 1 | Pending |
+| DISC-02 | Phase 2 | Pending |
+| DISC-03 | Phase 2 | Pending |
+| DISC-04 | Phase 2 | Pending |
+| DISC-05 | Phase 2 | Pending |
+| QUERY-01 | Phase 3 | Pending |
+| QUERY-02 | Phase 3 | Pending |
+| QUERY-03 | Phase 3 | Pending |
+| QUERY-04 | Phase 3 | Pending |
+| QUERY-05 | Phase 3 | Pending |
+| QUERY-06 | Phase 3 | Pending |
+| QUERY-07 | Phase 3 | Pending |
+| QUERY-08 | Phase 3 | Pending |
+| QUERY-09 | Phase 3 | Pending |
+| QUERY-10 | Phase 3 | Pending |
+| FETCH-01 | Phase 3 | Pending |
+| FETCH-02 | Phase 3 | Pending |
+| FETCH-03 | Phase 3 | Pending |
+| FETCH-04 | Phase 3 | Pending |
+| FETCH-05 | Phase 3 | Pending |
+| SEARCH-01 | Phase 4 | Pending |
+| SEARCH-02 | Phase 4 | Pending |
+| SEARCH-03 | Phase 4 | Pending |
+| SEARCH-04 | Phase 4 | Pending |
+| SEARCH-05 | Phase 4 | Pending |
+| SEARCH-06 | Phase 4 | Pending |
+| FRAG-01 | Phase 5 | Pending |
+| FRAG-02 | Phase 5 | Pending |
+| FRAG-03 | Phase 5 | Pending |
+| FRAG-04 | Phase 5 | Pending |
+| FRAG-05 | Phase 5 | Pending |
+| FRAG-06 | Phase 5 | Pending |
+| ENV-01 | Phase 6 | Pending |
+| ENV-02 | Phase 6 | Pending |
+| ENV-03 | Phase 6 | Pending |
+| ENV-04 | Phase 6 | Pending |
+| ENV-05 | Phase 6 | Pending |
+| ENV-06 | Phase 1 | Pending |
+| ENV-07 | Phase 1 | Pending |
+| INJ-01 | Phase 6 | Pending |
+| INJ-02 | Phase 6 | Pending |
+| INJ-03 | Phase 6 | Pending |
+| INJ-04 | Phase 6 | Pending |
+| INJ-05 | Phase 6 | Pending |
+| ANNO-01 | Phase 1 | Pending |
+| ANNO-02 | Phase 1 | Pending |
+| ANNO-03 | Phase 1 | Pending |
+| ANNO-04 | Phase 1 | Pending |
+| RATE-01 | Phase 7 | Pending |
+| RATE-02 | Phase 7 | Pending |
+| RATE-03 | Phase 7 | Pending |
+| RATE-04 | Phase 7 | Pending |
+| RATE-05 | Phase 7 | Pending |
+| RATE-06 | Phase 7 | Pending |
+| ERR-01 | Phase 7 | Pending |
+| ERR-02 | Phase 7 | Pending |
+| ERR-03 | Phase 7 | Pending |
+| ERR-04 | Phase 7 | Pending |
+| ERR-05 | Phase 7 | Pending |
+| OBS-01 | Phase 1 | Pending |
+| OBS-02 | Phase 1 | Pending |
+| OBS-03 | Phase 1 | Pending |
+| OBS-04 | Phase 1 | Pending |
+| OBS-05 | Phase 1 | Pending |
+| CFG-01 | Phase 1 | Pending |
+| CFG-02 | Phase 1 | Pending |
+| NFR-01 | Phase 8 | Pending |
+| NFR-02 | Phase 8 | Pending |
+| NFR-03 | Phase 8 | Pending |
+| NFR-04 | Phase 8 | Pending |
+| NFR-05 | Phase 8 | Pending |
+| TEST-01 | Phase 8 | Pending |
+| TEST-02 | Phase 8 | Pending |
+| TEST-03 | Phase 8 | Pending |
+| TEST-04 | Phase 8 | Pending |
+| TEST-05 | Phase 8 | Pending |
+| TEST-06 | Phase 8 | Pending |
+| SUB-01 | Phase 9 | Pending |
+| SUB-02 | Phase 9 | Pending |
+| SUB-03 | Phase 9 | Pending |
+| SUB-04 | Phase 9 | Pending |
+| SUB-05 | Phase 9 | Pending |
+| SUB-06 | Phase 9 | Pending |
+| SUB-07 | Phase 9 | Pending |
 
 **Coverage:**
-- v1 requirements: TBD total (populated by roadmapper)
-- Mapped to phases: TBD
-- Unmapped: TBD ⚠️
+- v1 requirements: 75 total
+- Mapped to phases: 75 ✓
+- Unmapped: 0
+
+**Per-phase counts:**
+- Phase 1 (Skeleton transport + first tool): 20 (TRANSPORT-01..06, DISC-01, ENV-06/07, ANNO-01..04, CFG-01/02, OBS-01..05)
+- Phase 2 (Discovery + denylists): 4 (DISC-02..05)
+- Phase 3 (Structured retrieval + URL-keyed fetch): 15 (QUERY-01..10, FETCH-01..05)
+- Phase 4 (Cross-database search): 6 (SEARCH-01..06)
+- Phase 5 (Transparent fragment-parent joins): 6 (FRAG-01..06)
+- Phase 6 (Envelope hardening + injection-resistance labelling): 10 (ENV-01..05, INJ-01..05)
+- Phase 7 (Rate limit + structured errors + healthz + logs): 11 (RATE-01..06, ERR-01..05)
+- Phase 8 (Full tests + 24h soak): 11 (NFR-01..05, TEST-01..06)
+- Phase 9 (Submission PR): 7 (SUB-01..07)
 
 ---
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-05-13 after initial definition*
+*Last updated: 2026-05-13 — traceability populated by gsd-roadmapper*
