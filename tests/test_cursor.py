@@ -107,6 +107,27 @@ def test_cursor_padding_safe():
         assert decoded == next_token
 
 
+def test_columns_none_distinct_from_empty_list():
+    """WR-05: canonical_shape_str preserves the columns=None vs columns=[] distinction.
+
+    The docstring on canonical_shape_str promises that `None` is preserved
+    verbatim and is distinct from `[]`. A truthiness-based implementation
+    (`sorted(columns) if columns else None`) would coerce `[]` to None and
+    make both shapes hash the same — invalidating the documented contract.
+
+    `sorted([])` is `[]`, so the corrected `is not None` check preserves
+    the empty-list shape unchanged.
+    """
+    from mcp_zeeker.core.cursor import canonical_shape_str
+
+    shape_none = canonical_shape_str("pdpc", "enforcement_decisions", None, [], None)
+    shape_empty = canonical_shape_str("pdpc", "enforcement_decisions", None, [], [])
+    assert shape_none != shape_empty, (
+        "columns=None and columns=[] must produce distinct canonical shapes "
+        "(docstring contract — WR-05)"
+    )
+
+
 def test_tilde_encoded_datasette_cursor():
     """D3-03: real Datasette `next` tokens contain commas + tilde-escaped colons.
 

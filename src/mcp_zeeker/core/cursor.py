@@ -77,7 +77,12 @@ def canonical_shape_str(
             [f if isinstance(f, dict) else f.model_dump() for f in (filters or [])],
             key=lambda d: (d["column"], d["op"]),
         ),
-        "columns": sorted(columns) if columns else None,
+        # WR-05: `is not None` (not truthiness) — the docstring promises
+        # that `columns=[]` is preserved as an empty list, distinct from
+        # `None`. `if columns` would coerce `[]` → False → None,
+        # contradicting the contract. `sorted([])` is `[]`, so the
+        # truthiness fix preserves the existing empty-list path.
+        "columns": sorted(columns) if columns is not None else None,
     }
     return json.dumps(shape, sort_keys=True, separators=(",", ":"))
 
