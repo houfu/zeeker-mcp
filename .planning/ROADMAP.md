@@ -76,7 +76,12 @@ Plans:
   3. A `query_table` call that filters or sorts on a hidden column, or names an unknown/hidden column in `columns`, returns `unknown_column` — and no user-supplied filter value text appears in the error message or any log line for any hostile-input fixture in the test corpus.
   4. Reusing a cursor with a different `sort`/`filters`/`columns` shape returns `invalid_cursor` (qhash mismatch), and walking the cursor with a stable shape returns unique rows with no gaps across the full result set.
   5. `fetch(database, table, url)` returns the non-heavy, non-fragment columns for the matching row on URL-keyed tables; an unmatched URL returns `not_found`, and a `fetch` on a table without URL mapping returns `unsupported_table_for_fetch`. URL match is exact string equality with no silent normalization.
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 03-01-PLAN.md — Foundation: config.py constants, core/visibility.py, core/filter_compiler.py (13 ops), DatasetteClient.get_table_rows, conftest extension, Wave 0 test stubs
+- [ ] 03-02-PLAN.md — Slice A: query_table handler with light-column projection (QUERY-01/02/05/06/07/09/10); filter-value safety canary corpus
+- [ ] 03-03-PLAN.md — Slice B: core/cursor.py + Pagination extension + retrieved_content reshape + qhash cursor walk (QUERY-03/04/08)
+- [ ] 03-04-PLAN.md — Slice C: fetch handler (FETCH-01..05) + url_column_for helper + tests/manual/PHASE3-CLIENT-VERIFY.md (D3-20)
 **UI hint**: no
 **Research flag**: needs phase research — filter compiler design + Datasette fixture capture from `data.zeeker.sg`; recommend `/gsd-research-phase` before planning
 
@@ -177,7 +182,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Skeleton transport + first tool | 0/6 | Not started | - |
 | 2. Discovery surface + denylists | 0/3 | Not started | - |
-| 3. Structured retrieval + URL-keyed fetch | 0/TBD | Not started | - |
+| 3. Structured retrieval + URL-keyed fetch | 0/4 | Not started | - |
 | 4. Cross-database search | 0/TBD | Not started | - |
 | 5. Transparent fragment-parent joins | 0/TBD | Not started | - |
 | 6. Envelope hardening + injection-resistance labelling | 0/TBD | Not started | - |
