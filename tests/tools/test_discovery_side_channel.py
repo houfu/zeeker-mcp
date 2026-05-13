@@ -88,7 +88,11 @@ async def test_hidden_and_nonexistent_share_helper(
         counter["n"] += 1
         original_raise(database, table)
 
-    with patch("mcp_zeeker.tools.discovery.raise_unknown_table", counting_raise):
+    # Phase 3 D3-06 move: `_resolve_table` now lives in `core.visibility` and
+    # invokes `raise_unknown_table` via the binding local to that module. Patch
+    # the call-site, not the re-export in `tools.discovery` (counter-patch
+    # semantics — patch where the function is LOOKED UP, not where it's exposed).
+    with patch("mcp_zeeker.core.visibility.raise_unknown_table", counting_raise):
         with pytest.raises(ToolError) as exc_hidden:
             await describe_table("sglawwatch", "metadata")  # hidden in HIDDEN_TABLES
         with pytest.raises(ToolError) as exc_nonexistent:

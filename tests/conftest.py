@@ -36,11 +36,7 @@ from mcp_zeeker.server import mcp
 # it so lookups with "zeeker-judgements" will hit.
 METADATA_STUB = {
     "databases": {
-        "Zeeker-Judgements": {
-            "tables": {
-                "judgments": {"description": "Singapore court judgments"}
-            }
-        }
+        "Zeeker-Judgements": {"tables": {"judgments": {"description": "Singapore court judgments"}}}
     }
 }
 
@@ -101,6 +97,17 @@ def _db_url(name: str) -> str:
     return f"{base}/{name}.json"
 
 
+def _table_url(database: str, table: str) -> str:
+    """Build the full upstream URL for /{database}/{table}.json (Phase 3 retrieval).
+
+    Mirrors _db_url's shape — used by query_table and fetch stub tests to
+    register table-row responses with httpx_mock. Single helper avoids each
+    retrieval test re-implementing the URL builder.
+    """
+    base = config.UPSTREAM_URL.rstrip("/")
+    return f"{base}/{database}/{table}.json"
+
+
 def _tables_payload(names: list[str]) -> dict:
     """Build a minimal Datasette /{db}.json payload with Phase 2 optional fields."""
     return {
@@ -109,6 +116,21 @@ def _tables_payload(names: list[str]) -> dict:
             for n in names
         ]
     }
+
+
+# Phase 3 — minimal well-formed Datasette table-view response (_shape=objects).
+# Used by retrieval stub tests to populate httpx_mock without re-declaring the
+# full shape in each test. Real Datasette responses include filtered_table_rows_count;
+# tests that care about that field provide a custom payload instead of this stub.
+TABLE_ROWS_STUB: dict = {
+    "rows": [
+        {"citation": "2026 SGDC 136", "case_name": "Test v Test"},
+    ],
+    "columns": ["citation", "case_name"],
+    "next": None,
+    "truncated": False,
+    "filtered_table_rows_count": 1,
+}
 
 
 @pytest.fixture
@@ -150,7 +172,14 @@ def stub_upstream(httpx_mock: pytest_httpx.HTTPXMock):
     for db in config.ALLOWED_DATABASES:
         if db == "sglawwatch":
             # 4 hidden (2 legacy + 2 platform) + 2 visible
-            tables = ["metadata", "schema_versions", "_zeeker_schemas", "_zeeker_updates", "t1", "t2"]
+            tables = [
+                "metadata",
+                "schema_versions",
+                "_zeeker_schemas",
+                "_zeeker_updates",
+                "t1",
+                "t2",
+            ]
         else:
             # 2 platform-internal + 2 visible
             tables = ["_zeeker_schemas", "_zeeker_updates", "t1", "t2"]
@@ -158,6 +187,22 @@ def stub_upstream(httpx_mock: pytest_httpx.HTTPXMock):
             url=_db_url(db),
             json=_tables_payload(tables),
         )
+    return httpx_mock
+
+
+@pytest.fixture
+def stub_table_rows(httpx_mock: pytest_httpx.HTTPXMock):
+    """Phase 3 — thin facade around httpx_mock for table-row response staging.
+
+    Returns the httpx_mock instance so tests can call .add_response(url=..., json=...)
+    directly. The fixture exists primarily to give retrieval tests a consistent
+    discovery name (`stub_table_rows`) and to mirror the `stub_upstream` shape.
+
+    Usage:
+        async def test_x(stub_table_rows):
+            stub_table_rows.add_response(url=_table_url("pdpc", "enforcement_decisions"),
+                                          json=TABLE_ROWS_STUB)
+    """
     return httpx_mock
 
 
