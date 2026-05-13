@@ -145,7 +145,8 @@ def test_upstream_url_env_driven(monkeypatch):
 
 def test_single_source_of_truth():
     """CFG-01: No other module in src/mcp_zeeker/ redefines the locked constants."""
-    root = Path("src/mcp_zeeker")
+    root = Path(__file__).parent.parent / "src" / "mcp_zeeker"
+    assert root.exists(), f"Source root not found: {root}"
     forbidden_patterns = [
         r"^ALLOWED_DATABASES\s*=",
         r"^HIDDEN_TABLES\s*=",
