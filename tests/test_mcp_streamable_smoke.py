@@ -15,58 +15,16 @@ reach the server's httpx calls. However, per RESEARCH.md Pattern C caveat, we ke
 the live smoke conservative: assert only the transport handshake and tools/list (no
 upstream call required), not the full tools/call envelope shape — Pattern B already
 proves that contract.
+
+Note on live_server fixture: moved to tests/conftest.py (Phase 2 Plan 03) so
+test_transport_stateless_session.py can share it without cross-file imports.
 """
 
 from __future__ import annotations
 
-import socket
-import threading
-import time
-
 import pytest
-import uvicorn
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
-
-from mcp_zeeker.app import app
-
-
-def _free_port() -> int:
-    """Bind to port 0 to get an OS-assigned free port, then release the socket."""
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
-
-
-@pytest.fixture
-def live_server():
-    """Spawn uvicorn on a random port in a daemon thread; yield the /mcp/ URL.
-
-    The thread is cleaned up after each test. The server uses asyncio loop so
-    pytest-httpx patches (which also use asyncio) are visible in the thread.
-    """
-    port = _free_port()
-    cfg = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="warning",
-        loop="asyncio",
-    )
-    server = uvicorn.Server(cfg)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    # Poll until the server is ready (up to 2.5s)
-    for _ in range(50):
-        if server.started:
-            break
-        time.sleep(0.05)
-    assert server.started, "uvicorn did not start within 2.5s"
-    yield f"http://127.0.0.1:{port}/mcp/"
-    server.should_exit = True
-    thread.join(timeout=5)
 
 
 async def test_streamable_http_handshake_and_list_tools(live_server):
