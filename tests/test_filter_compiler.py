@@ -136,6 +136,40 @@ def test_numeric_coercion_failure_raises_invalid_filter_op():
     assert "not-a-number" not in msg
 
 
+def test_int_column_rejects_float_value():
+    """WR-01: INTEGER column must reject float values (no silent truncation).
+
+    `int(3.99) == 3` would silently match rows the caller did not intend
+    (`penalty_amount >= 3.99` would match `penalty_amount == 3`). Reject
+    explicitly instead so the caller learns the column is integer-typed.
+    """
+    for op in ("gt", "gte", "lt", "lte"):
+        with pytest.raises(ToolError, match=r"^invalid_filter_op:"):
+            compile_filters(
+                [Filter(column="penalty_amount", op=op, value=3.99)],
+                visible_columns=VISIBLE,
+                column_types=TYPES,
+            )
+
+
+def test_int_column_rejects_bool_value():
+    """WR-01: INTEGER column must reject bool values.
+
+    `int(True) == 1` and `int(False) == 0` — both would coerce silently
+    because `isinstance(True, int)` is True in Python. Same fix-class as
+    the float-truncation issue; explicit rejection forces the caller to
+    pass an integer.
+    """
+    for op in ("gt", "gte", "lt", "lte"):
+        for value in (True, False):
+            with pytest.raises(ToolError, match=r"^invalid_filter_op:"):
+                compile_filters(
+                    [Filter(column="penalty_amount", op=op, value=value)],
+                    visible_columns=VISIBLE,
+                    column_types=TYPES,
+                )
+
+
 def test_in_uses_comma_join():
     """D3-02: op='in' compiles to ('{col}__in', 'a,b,c') — verified URL form."""
     out = compile_filters(

@@ -146,6 +146,18 @@ def compile_filters(
         if op in ("gt", "gte", "lt", "lte"):
             col_type = column_types.get(f.column, "TEXT")
             if col_type == "INTEGER":
+                # WR-01: reject floats and bools BEFORE int() — `int(3.99)`
+                # is 3 (silent truncation) and `int(True)` is 1, both of
+                # which would return rows the caller did not mean to ask
+                # for (e.g. `penalty_amount >= 3.99` matching `penalty_amount
+                # == 3`). A caller who genuinely wants integer semantics
+                # for a float must round / floor / ceil on their side; we
+                # do not pick the rounding rule for them. `bool` is checked
+                # first because `isinstance(True, int)` is True in Python.
+                if isinstance(f.value, bool) or isinstance(f.value, float):
+                    raise ToolError(
+                        "invalid_filter_op: value not coercible for operator"
+                    ) from None
                 try:
                     coerced: int | float = int(f.value)
                 except (TypeError, ValueError):
