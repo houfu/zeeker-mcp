@@ -256,3 +256,23 @@ LOG_FIELDS: tuple[str, ...] = (
     "ip_prefix",
     "error_code",
 )
+
+# ---------------------------------------------------------------------------
+# Phase 3 — retrieval defaults (D3-17, CFG-01/02)
+# ---------------------------------------------------------------------------
+
+DEFAULT_QUERY_LIMIT: int = 50
+MAX_QUERY_LIMIT: int = 200
+
+# Phase 3 — heavy columns (D3-04). Explicit frozenset — NOT computed from
+# LIGHT_COLUMNS. Adding a new heavy column name is a config-only one-line change.
+HEAVY_COLUMNS: frozenset[str] = frozenset(
+    {
+        "content_text",
+        "full_text",
+        "html_raw",
+        "footnote_text",
+        "figure_descriptions",
+        "text",
+    }
+)

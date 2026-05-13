@@ -17,7 +17,6 @@ import asyncio
 from typing import Annotated
 
 import structlog
-from fastmcp.exceptions import ToolError
 from fastmcp.tools.tool import ToolAnnotations
 from pydantic import Field
 
@@ -26,8 +25,27 @@ from mcp_zeeker.core.config_lookup import hidden_columns_for
 from mcp_zeeker.core.datasette_client import DatasetteClient
 from mcp_zeeker.core.envelope import Envelope
 from mcp_zeeker.core.metadata_cache import MetadataCache
+from mcp_zeeker.core.visibility import (
+    _resolve_table,
+    _visible_tables,
+    raise_unknown_database,
+    raise_unknown_table,
+)
 from mcp_zeeker.server import mcp
 from mcp_zeeker.tools.discovery_models import ColumnInfo, TableSchema
+
+# Re-exports above keep `from mcp_zeeker.tools.discovery import raise_unknown_table`
+# resolvable for Phase 2 tests (D3-06 — helpers moved to core/visibility.py in
+# Phase 3 to avoid cross-`tools/` imports between discovery.py and retrieval.py).
+__all__ = [
+    "_resolve_table",
+    "_visible_tables",
+    "describe_table",
+    "list_databases",
+    "list_tables",
+    "raise_unknown_database",
+    "raise_unknown_table",
+]
 
 log = structlog.get_logger()
 
@@ -53,67 +71,15 @@ _DESCRIBE_TABLE_DESCRIPTION = (
 
 # ---------------------------------------------------------------------------
 # Shared helpers (DISC-05 / D2-14 / D2-15)
+#
+# raise_unknown_database, raise_unknown_table, _visible_tables, _resolve_table
+# live in mcp_zeeker.core.visibility (Phase 3 / D3-06 move). They are re-exported
+# at the top of this module for backward compatibility — Phase 2 tests still
+# import them from `mcp_zeeker.tools.discovery`. The counter-patch identity
+# `from mcp_zeeker.tools.discovery import raise_unknown_table` IS the same
+# function object as `from mcp_zeeker.core.visibility import raise_unknown_table`
+# (re-export is a name binding, not a wrapping shim).
 # ---------------------------------------------------------------------------
-
-
-def raise_unknown_database(database: str) -> None:
-    """Single emission point for unknown_database errors (ERR-02, D2-17).
-
-    Raises ToolError with a stable message prefix so callers can match on it.
-    Called ONLY when database is not in config.ALLOWED_DATABASES.
-    """
-    raise ToolError(f"unknown_database: Database not found: {database}")
-
-
-def raise_unknown_table(database: str, table: str) -> None:
-    """Single emission point for unknown_table errors (D2-14, DISC-05).
-
-    Used for BOTH hidden tables AND genuinely nonexistent tables — same function,
-    same message text, no side-channel (D2-15).
-
-    INJ-05 note: {database}.{table} here are request parameter IDENTIFIERS (not
-    user-supplied filter values), so echoing them in the error message is safe and
-    intentional. Phase 3 filter values are a different threat surface.
-    """
-    raise ToolError(f"unknown_table: Table not found: {database}.{table}")
-
-
-async def _visible_tables(database: str) -> set[str]:
-    """Return the set of non-hidden table names for a database.
-
-    Applies BOTH the upstream hidden flag AND the config denylist (HIDDEN_TABLES).
-    Used by list_tables AND describe_table — single source of truth for what is
-    visible (DISC-05: both hidden and nonexistent fail `name not in visible`).
-
-    CRITICAL (Pitfall 1): NEVER add a separate HIDDEN_TABLES pre-check before
-    calling this function. The DISC-05 side-channel test detects separate code
-    paths by patching raise_unknown_table and counting calls. A pre-check would
-    short-circuit some paths and break the counter assertion.
-    """
-    summary = await DatasetteClient.current().get_database(database)
-    hidden_set = config.HIDDEN_TABLES.get(database, set())
-    return {
-        t.name
-        for t in summary.tables
-        if not t.hidden and t.name not in hidden_set
-    }
-
-
-async def _resolve_table(database: str, table: str) -> None:
-    """Validate database exists and table is visible.
-
-    Raises raise_unknown_database if database not in ALLOWED_DATABASES.
-    Raises raise_unknown_table if table is hidden OR nonexistent.
-
-    D2-15: same code path for hidden and nonexistent — no side-channel.
-    Both hidden and nonexistent tables fail the `table not in visible` dict
-    check; raise_unknown_table is the single emission point for both cases.
-    """
-    if database not in config.ALLOWED_DATABASES:
-        raise_unknown_database(database)
-    visible = await _visible_tables(database)
-    if table not in visible:
-        raise_unknown_table(database, table)
 
 
 def _supports_fragments(database: str, table: str) -> bool:
@@ -158,10 +124,7 @@ async def list_databases() -> Envelope:
     rows = []
     for name, summary in zip(config.ALLOWED_DATABASES, summaries, strict=True):
         hidden_set = config.HIDDEN_TABLES.get(name, set())
-        visible_count = sum(
-            1 for t in summary.tables
-            if not t.hidden and t.name not in hidden_set
-        )
+        visible_count = sum(1 for t in summary.tables if not t.hidden and t.name not in hidden_set)
         rows.append(
             {
                 "name": name,
@@ -201,10 +164,9 @@ async def list_tables(
         if t.hidden or t.name in hidden_set:
             continue
         meta = await MetadataCache.current().get_table_metadata(database, t.name)
-        description = (
-            (meta or {}).get("description")
-            or config.TABLE_DESCRIPTIONS.get(database, {}).get(t.name, "")
-        )
+        description = (meta or {}).get("description") or config.TABLE_DESCRIPTIONS.get(
+            database, {}
+        ).get(t.name, "")
         rows.append({"name": t.name, "row_count": t.count, "description": description})
 
     return Envelope.for_table_list(database=database, rows=rows)
@@ -240,9 +202,7 @@ async def describe_table(
     hidden_cols = hidden_columns_for(database, table)
     available_columns = [c for c in t.columns if c not in hidden_cols]
     light_columns = [
-        c
-        for c in config.LIGHT_COLUMNS.get(f"{database}.{table}", [])
-        if c in available_columns
+        c for c in config.LIGHT_COLUMNS.get(f"{database}.{table}", []) if c in available_columns
     ]
 
     column_types_map = await DatasetteClient.current().get_table_column_types(database)
@@ -270,10 +230,9 @@ async def describe_table(
     supports_frags = _supports_fragments(database, table)
 
     meta = await MetadataCache.current().get_table_metadata(database, table)
-    description = (
-        (meta or {}).get("description")
-        or config.TABLE_DESCRIPTIONS.get(database, {}).get(table, "")
-    )
+    description = (meta or {}).get("description") or config.TABLE_DESCRIPTIONS.get(
+        database, {}
+    ).get(table, "")
 
     schema = TableSchema(
         name=table,
