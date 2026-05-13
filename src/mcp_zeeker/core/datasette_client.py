@@ -132,24 +132,43 @@ class DatasetteClient:
         """Fetch column type map from /{database}/_zeeker_schemas.json.
 
         Returns {table_name: {column_name: sql_type}} for all tables in the DB.
-        Falls back to empty dict if the table is absent or the upstream call fails;
-        caller is expected to merge with config.COLUMN_TYPES as a fallback.
+        Falls back to empty dict if the table is absent, the upstream call
+        fails, OR the response shape is malformed (HTTP 200 with unexpected
+        JSON during a partial outage / schema drift). The caller is expected
+        to merge with config.COLUMN_TYPES as a fallback.
 
         Response shape: {"columns": [...], "rows": [[resource_name, ..., column_definitions, ...]]}
         """
+        # WR-06: wrap BOTH the upstream call AND the JSON-parsing path so any
+        # of UpstreamCallFailed / JSONDecodeError / KeyError / ValueError /
+        # IndexError / TypeError maps to the documented empty-dict fallback.
+        # Previously, a HTTP 200 with a malformed JSON shape (partial outage
+        # or upstream schema drift) propagated an un-mapped exception that
+        # bypassed FastMCP's ToolError mapping and surfaced as a 500-class
+        # error with a Python traceback in the envelope — leaking
+        # implementation details and breaking the D3-12 locked catalog.
+        # json.JSONDecodeError is a subclass of ValueError, so the explicit
+        # list catches it without an extra entry; `.index()` ValueErrors are
+        # the same class and intentionally swept into the fallback.
         try:
             resp = await self._request_with_retry("GET", f"/{database}/_zeeker_schemas.json")
-        except UpstreamCallFailed:
+            payload = resp.json()
+            col_idx = payload["columns"].index("resource_name")
+            defn_idx = payload["columns"].index("column_definitions")
+            result: dict[str, dict[str, str]] = {}
+            for row in payload.get("rows", []):
+                table_name = row[col_idx]
+                raw_defn = row[defn_idx]
+                result[table_name] = json.loads(raw_defn) if isinstance(raw_defn, str) else {}
+            return result
+        except (
+            UpstreamCallFailed,
+            KeyError,
+            ValueError,  # includes json.JSONDecodeError and .index() misses
+            IndexError,
+            TypeError,
+        ):
             return {}
-        payload = resp.json()
-        col_idx = payload["columns"].index("resource_name")
-        defn_idx = payload["columns"].index("column_definitions")
-        result: dict[str, dict[str, str]] = {}
-        for row in payload.get("rows", []):
-            table_name = row[col_idx]
-            raw_defn = row[defn_idx]
-            result[table_name] = json.loads(raw_defn) if isinstance(raw_defn, str) else {}
-        return result
 
     async def get_table_rows(
         self,
