@@ -79,16 +79,16 @@ Plans:
 **Plans**: 4 plans
 Plans:
 **Wave 1**
-- [ ] 03-01-PLAN.md — Foundation: config.py constants, core/visibility.py, core/filter_compiler.py (13 ops), DatasetteClient.get_table_rows, conftest extension, Wave 0 test stubs
+- [x] 03-01-PLAN.md — Foundation: config.py constants, core/visibility.py, core/filter_compiler.py (13 ops), DatasetteClient.get_table_rows, conftest extension, Wave 0 test stubs
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03-02-PLAN.md — Slice A: query_table handler with light-column projection (QUERY-01/02/05/06/07/09/10); filter-value safety canary corpus
+- [x] 03-02-PLAN.md — Slice A: query_table handler with light-column projection (QUERY-01/02/05/06/07/09/10); filter-value safety canary corpus
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 03-03-PLAN.md — Slice B: core/cursor.py + Pagination extension + retrieved_content reshape + qhash cursor walk (QUERY-03/04/08)
+- [x] 03-03-PLAN.md — Slice B: core/cursor.py + Pagination extension + retrieved_content reshape + qhash cursor walk (QUERY-03/04/08)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 03-04-PLAN.md — Slice C: fetch handler (FETCH-01..05) + url_column_for helper + tests/manual/PHASE3-CLIENT-VERIFY.md (D3-20)
+- [x] 03-04-PLAN.md — Slice C: fetch handler (FETCH-01..05) + url_column_for helper + tests/manual/PHASE3-CLIENT-VERIFY.md (D3-20)
 **UI hint**: no
 **Research flag**: needs phase research — filter compiler design + Datasette fixture capture from `data.zeeker.sg`; recommend `/gsd-research-phase` before planning
 
