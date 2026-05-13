@@ -34,6 +34,7 @@ def test_round_trip():
 def test_shape_mismatch_raises_invalid_cursor():
     """D3-03: decode with a different shape rejects the cursor."""
     from fastmcp.exceptions import ToolError
+
     from mcp_zeeker.core.cursor import canonical_shape_str, decode_cursor, encode_cursor
 
     shape_a = canonical_shape_str("pdpc", "enforcement_decisions", None, [], None)
@@ -46,6 +47,7 @@ def test_shape_mismatch_raises_invalid_cursor():
 def test_malformed_cursor_raises():
     """D3-03: decode rejects non-base64 / malformed tokens with invalid_cursor."""
     from fastmcp.exceptions import ToolError
+
     from mcp_zeeker.core.cursor import canonical_shape_str, decode_cursor
 
     shape = canonical_shape_str("pdpc", "enforcement_decisions", None, [], None)
