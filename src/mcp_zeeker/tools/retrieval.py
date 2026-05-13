@@ -219,7 +219,17 @@ async def query_table(
     if columns is None:
         configured_light = config.LIGHT_COLUMNS.get(f"{database}.{table}", [])
         if configured_light:
-            light_to_emit = [c for c in configured_light if c in visible]
+            # WR-03: defend against config drift adding a HEAVY_COLUMNS member
+            # to LIGHT_COLUMNS[<db>.<table>]. Without the explicit subtraction
+            # here, a heavy column smuggled into the configured light set
+            # would surface at the row TOP level instead of under
+            # `retrieved_content`, violating the D3-19 snapshot contract
+            # (`set(row.keys()) ∩ HEAVY_COLUMNS == ∅` for default projections).
+            # The fallback branch below already does this subtraction; mirror
+            # it here so both branches enforce the same invariant.
+            light_to_emit = [
+                c for c in configured_light if c in visible and c not in config.HEAVY_COLUMNS
+            ]
         else:
             light_to_emit = sorted(visible - config.HEAVY_COLUMNS)
         heavy_to_emit: list[str] = []
