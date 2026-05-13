@@ -18,6 +18,8 @@ short-circuiting pre-check would break that assertion and leak presence info.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from fastmcp.exceptions import ToolError
 
 from mcp_zeeker import config
@@ -29,7 +31,7 @@ from mcp_zeeker.core.datasette_client import DatasetteClient
 # ---------------------------------------------------------------------------
 
 
-def raise_unknown_database(database: str) -> None:
+def raise_unknown_database(database: str) -> NoReturn:
     """Single emission point for unknown_database errors (ERR-02, D2-17).
 
     Raises ToolError with a stable message prefix so callers can match on it.
@@ -38,7 +40,7 @@ def raise_unknown_database(database: str) -> None:
     raise ToolError(f"unknown_database: Database not found: {database}")
 
 
-def raise_unknown_table(database: str, table: str) -> None:
+def raise_unknown_table(database: str, table: str) -> NoReturn:
     """Single emission point for unknown_table errors (D2-14, DISC-05).
 
     Used for BOTH hidden tables AND genuinely nonexistent tables — same function,
@@ -51,7 +53,7 @@ def raise_unknown_table(database: str, table: str) -> None:
     raise ToolError(f"unknown_table: Table not found: {database}.{table}")
 
 
-def raise_unknown_column(database: str, table: str, column: str) -> None:
+def raise_unknown_column(database: str, table: str, column: str) -> NoReturn:
     """Single emission point for unknown_column errors (D3-07).
 
     Used for BOTH hidden columns AND genuinely nonexistent columns — same function,
@@ -65,7 +67,7 @@ def raise_unknown_column(database: str, table: str, column: str) -> None:
     raise ToolError(f"unknown_column: Column not found: {database}.{table}.{column}")
 
 
-def raise_unsupported_table_for_fetch(database: str, table: str) -> None:
+def raise_unsupported_table_for_fetch(database: str, table: str) -> NoReturn:
     """Single emission point for fetch on a non-URL-keyed table (D3-14, FETCH-04).
 
     Raised when the caller asks fetch() for a table absent from config.URL_COLUMNS.
@@ -73,7 +75,7 @@ def raise_unsupported_table_for_fetch(database: str, table: str) -> None:
     raise ToolError(f"unsupported_table_for_fetch: Table {database}.{table} has no URL column")
 
 
-def raise_not_found(database: str, table: str) -> None:
+def raise_not_found(database: str, table: str) -> NoReturn:
     """Single emission point for fetch zero-row responses (D3-14 step 4, FETCH-05).
 
     URL is NEVER echoed (INJ-05). The {database}.{table} identifiers are safe
