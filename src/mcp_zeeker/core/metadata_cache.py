@@ -116,7 +116,11 @@ class MetadataCache:
                 return  # serve stale while refresh runs (thundering-herd protection)
             # First ever call with concurrent arrivals — wait for the holder to complete
             async with self._refresh_lock:
-                return  # holder completed; _data now set
+                if self._data is None:
+                    # Holder's first-ever fetch failed; warn so this waiter's failure is
+                    # traceable (WR-01: concurrent waiters must not silently return None)
+                    log.warning("metadata_cache_refresh_failed_concurrent_waiter", ttl=self._ttl)
+                return
 
         async with self._refresh_lock:
             # Double-check pattern (another task may have refreshed between check and acquire)
