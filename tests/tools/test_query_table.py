@@ -470,8 +470,9 @@ async def test_heavy_columns_appear_under_retrieved_content(
         assert "retrieved_content" in row
         rc = row["retrieved_content"]
         assert "content_text" in rc
+        leaked = set(rc.keys()) - config.HEAVY_COLUMNS
         assert set(rc.keys()) <= config.HEAVY_COLUMNS, (
-            f"non-heavy column leaked into retrieved_content: {set(rc.keys()) - config.HEAVY_COLUMNS}"
+            f"non-heavy column leaked into retrieved_content: {leaked}"
         )
         # And the light column is still at the top level.
         assert row.get("citation") == "2026 SGDC 136"
@@ -578,12 +579,8 @@ async def test_cursor_walk_round_trip(
     }
     # Both pages share the same /table.json prefix; pytest_httpx returns responses
     # in FIFO order on the same matcher, so register page_1 first, then page_2.
-    httpx_mock.add_response(
-        url=_table_url_re("zeeker-judgements", "judgments"), json=page_1
-    )
-    httpx_mock.add_response(
-        url=_table_url_re("zeeker-judgements", "judgments"), json=page_2
-    )
+    httpx_mock.add_response(url=_table_url_re("zeeker-judgements", "judgments"), json=page_1)
+    httpx_mock.add_response(url=_table_url_re("zeeker-judgements", "judgments"), json=page_2)
 
     # First call — issued without a cursor.
     env_1 = await query_table("zeeker-judgements", "judgments", sort="-decision_date")
@@ -757,19 +754,54 @@ def _pdpc_rows_payload() -> dict:
 # The substring is what we assert appears in the captured request URL's params.
 # Numeric ops use penalty_amount (INTEGER); list ops use title (TEXT).
 _THIRTEEN_OPS_CASES = [
-    ("exact", {"column": "title", "op": "exact", "value": "Decision A"}, "title__exact", "Decision A"),
+    (
+        "exact",
+        {"column": "title", "op": "exact", "value": "Decision A"},
+        "title__exact",
+        "Decision A",
+    ),
     ("not", {"column": "title", "op": "not", "value": "Decision A"}, "title__not", "Decision A"),
-    ("contains", {"column": "title", "op": "contains", "value": "Decision"}, "title__contains", "Decision"),
-    ("startswith", {"column": "title", "op": "startswith", "value": "Dec"}, "title__startswith", "Dec"),
+    (
+        "contains",
+        {"column": "title", "op": "contains", "value": "Decision"},
+        "title__contains",
+        "Decision",
+    ),
+    (
+        "startswith",
+        {"column": "title", "op": "startswith", "value": "Dec"},
+        "title__startswith",
+        "Dec",
+    ),
     ("endswith", {"column": "title", "op": "endswith", "value": "A"}, "title__endswith", "A"),
     ("gt", {"column": "penalty_amount", "op": "gt", "value": 1000}, "penalty_amount__gt", "1000"),
-    ("gte", {"column": "penalty_amount", "op": "gte", "value": 1000}, "penalty_amount__gte", "1000"),
+    (
+        "gte",
+        {"column": "penalty_amount", "op": "gte", "value": 1000},
+        "penalty_amount__gte",
+        "1000",
+    ),
     ("lt", {"column": "penalty_amount", "op": "lt", "value": 1000}, "penalty_amount__lt", "1000"),
-    ("lte", {"column": "penalty_amount", "op": "lte", "value": 1000}, "penalty_amount__lte", "1000"),
+    (
+        "lte",
+        {"column": "penalty_amount", "op": "lte", "value": 1000},
+        "penalty_amount__lte",
+        "1000",
+    ),
     ("in", {"column": "title", "op": "in", "value": ["A", "B"]}, "title__in", "A,B"),
     ("notin", {"column": "title", "op": "notin", "value": ["A", "B"]}, "title__notin", "A,B"),
-    ("isnull", {"column": "penalty_amount", "op": "isnull", "value": None}, "penalty_amount__isnull", "1"),
-    ("notnull", {"column": "penalty_amount", "op": "notnull", "value": None}, "penalty_amount__notnull", "1"),
+    (
+        "isnull",
+        {"column": "penalty_amount", "op": "isnull", "value": None},
+        "penalty_amount__isnull",
+        "1",
+    ),
+    (
+        "notnull",
+        {"column": "penalty_amount", "op": "notnull", "value": None},
+        "penalty_amount__notnull",
+        "1",
+    ),
 ]
 
 
