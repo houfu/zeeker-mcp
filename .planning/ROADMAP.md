@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Structured JSON logs include `request_id` (contextvar-bound), `tool`, `duration_ms`, `status`, and `ip_prefix` for every request, with the schema field set declared in `config.py`.
 **Plans**: 6 plans
 Plans:
-- [ ] 01-01-PLAN.md — Bootstrap: pyproject.toml + package skeleton + Wave-0 test stubs
+- [x] 01-01-PLAN.md — Bootstrap: pyproject.toml + package skeleton + Wave-0 test stubs
 - [ ] 01-02-PLAN.md — config.py (D-21 source of truth) + Envelope/Provenance/Pagination Pydantic models
 - [ ] 01-03-PLAN.md — Transport stack: FastMCP server + Starlette app + middleware (request_id/origin/access_log) + structlog + httpx lifecycle
 - [ ] 01-04-PLAN.md — DatasetteClient with retry + list_databases tool + 6 Pydantic input model drafts + NotImplementedError stubs
