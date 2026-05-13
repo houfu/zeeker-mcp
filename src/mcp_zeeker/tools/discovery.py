@@ -23,8 +23,7 @@ log = structlog.get_logger()
 _DESCRIPTION = (
     "List the four Singapore legal databases available on data.zeeker.sg, "
     "with one-line descriptions and visible table counts. "
-    "Rate limits: 20/burst, 60/minute, 5000/day per IP. "
-    + config.TOOL_TRAILER
+    "Rate limits: 20/burst, 60/minute, 5000/day per IP. " + config.TOOL_TRAILER
 )
 
 
@@ -69,6 +68,4 @@ async def list_tables(database: str) -> Envelope:
 
 async def describe_table(database: str, table: str) -> Envelope:
     """Stub — describe_table is registered in Phase 2 (discovery + denylists)."""
-    raise NotImplementedError(
-        "describe_table is registered in Phase 2 (discovery + denylists)"
-    )
+    raise NotImplementedError("describe_table is registered in Phase 2 (discovery + denylists)")
