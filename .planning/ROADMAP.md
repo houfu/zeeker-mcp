@@ -57,7 +57,11 @@ Plans:
   3. A request for a hidden table and a request for a genuinely nonexistent table return `unknown_table` with identical message text and indistinguishable timing buckets — no presence side-channel.
   4. `describe_table` distinguishes the default `light_columns` set from the full `available_columns` so a caller knows exactly which columns the `columns` parameter on `query_table` will accept.
   5. `config.HIDDEN_TABLES` and `config.HIDDEN_COLUMNS` are populated for all four databases and reviewable in a single audit pass.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Foundation: config.py extensions + MetadataCache + config_lookup + DatasetteClient column-types + lifespan binding + Wave-0 test stubs + conftest fixtures
+- [ ] 02-02-PLAN.md — Tools: list_tables + describe_table @mcp.tool implementations + shared _visible_tables/_resolve_table/raise_unknown_* helpers + Envelope.for_table_list + TableSchema + DISC-05 side-channel test
+- [ ] 02-03-PLAN.md — Tail: F-1 proxy-headers regression test + F-3 stateless_http session regression tests + tests/manual/PHASE2-CLIENT-VERIFY.md with F-4 dry-run obligation
 **UI hint**: no
 **Research flag**: standard patterns — `/gsd-research-phase` optional
 
@@ -172,7 +176,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton transport + first tool | 0/6 | Not started | - |
-| 2. Discovery surface + denylists | 0/TBD | Not started | - |
+| 2. Discovery surface + denylists | 0/3 | Not started | - |
 | 3. Structured retrieval + URL-keyed fetch | 0/TBD | Not started | - |
 | 4. Cross-database search | 0/TBD | Not started | - |
 | 5. Transparent fragment-parent joins | 0/TBD | Not started | - |
