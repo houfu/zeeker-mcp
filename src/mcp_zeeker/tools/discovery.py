@@ -23,7 +23,7 @@ from pydantic import Field
 
 from mcp_zeeker import config
 from mcp_zeeker.core.config_lookup import hidden_columns_for
-from mcp_zeeker.core.datasette_client import DatasetteClient, UpstreamCallFailed  # noqa: F401
+from mcp_zeeker.core.datasette_client import DatasetteClient
 from mcp_zeeker.core.envelope import Envelope
 from mcp_zeeker.core.metadata_cache import MetadataCache
 from mcp_zeeker.server import mcp
