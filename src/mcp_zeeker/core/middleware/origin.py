@@ -29,10 +29,7 @@ class OriginAllowlistMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        headers = {
-            k.decode("latin-1").lower(): v.decode("latin-1")
-            for k, v in scope["headers"]
-        }
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
         origin = headers.get("origin")
 
         # Handle CORS preflight before any allowlist enforcement

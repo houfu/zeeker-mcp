@@ -23,10 +23,7 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
             return
 
-        headers = {
-            k.decode("latin-1").lower(): v.decode("latin-1")
-            for k, v in scope["headers"]
-        }
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
         incoming = headers.get("x-request-id", "")
         if incoming and _REQUEST_ID_PATTERN.match(incoming):
             request_id = incoming

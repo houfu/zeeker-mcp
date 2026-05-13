@@ -8,7 +8,9 @@ the AUTHORITATIVE version of this file. When both worktrees are merged, the
 
 The names exposed here match the D-21 catalog guaranteed by the orchestrator.
 """
+
 from __future__ import annotations
+
 import os
 
 # D-21: Explicit four-name list of allowed databases

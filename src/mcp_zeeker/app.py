@@ -1,0 +1,96 @@
+# src/mcp_zeeker/app.py
+# Source: 01-RESEARCH.md Pattern A lines 218–285 (verbatim, with modifications per plan)
+# Modifications vs Pattern A:
+#   1. build_http_client() factory instead of inline httpx.AsyncClient construction
+#   2. configure_logging() called at module top (before lifespan)
+#   3. Envelope-contract sanity guard inside lifespan before yield (Pattern F adapted)
+#   4. DatasetteClient contextvar binding in lifespan
+from __future__ import annotations
+
+import contextlib
+
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
+
+from mcp_zeeker import config
+from mcp_zeeker.core.http_client import build_http_client
+from mcp_zeeker.core.logging import configure_logging
+from mcp_zeeker.core.middleware.origin import OriginAllowlistMiddleware
+from mcp_zeeker.core.middleware.request_id import RequestIdMiddleware
+from mcp_zeeker.server import mcp  # FastMCP instance
+
+# Configure structlog before any module imports structlog.get_logger()
+configure_logging()
+
+# Build the FastMCP HTTP app once at import time.
+# path="/" because we mount the whole thing under /mcp below; FastMCP
+# would otherwise prepend its default streamable_http_path.
+mcp_app = mcp.http_app(path="/")
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: Starlette):
+    """
+    Own the httpx.AsyncClient for the process lifetime AND nest the
+    FastMCP session-manager lifespan. Both must run; if you only enter
+    one, /mcp hangs on first POST.
+    """
+    async with build_http_client() as http_client:
+        app.state.http_client = http_client
+
+        # Envelope-contract sanity guard (Pattern F adapted, per plan Task 3).
+        # Runs before yield so a bad deploy fails liveness immediately.
+        # With zero registered tools (Wave 2 / before Plan 04), this is a no-op.
+        try:
+            from mcp_zeeker.core.envelope import Envelope
+
+            tools = await mcp.list_tools()
+            for tool in tools:
+                # Check return type annotation — every tool must return Envelope
+                if tool.return_type is not Envelope:
+                    raise RuntimeError(
+                        f"tool contract drift: {tool.name} return_type is not Envelope"
+                    )
+                # Check description ends with TOOL_TRAILER
+                if not (tool.description or "").rstrip().endswith(config.TOOL_TRAILER):
+                    raise RuntimeError(
+                        f"tool contract drift: {tool.name} description missing TOOL_TRAILER"
+                    )
+        except ImportError:
+            # Envelope not available (wave-2 stub not yet merged) — tolerate
+            pass
+
+        # Bind the upstream client into the DatasetteClient contextvar
+        from mcp_zeeker.core.datasette_client import DatasetteClient
+
+        token = DatasetteClient.bind(DatasetteClient(http_client))
+        try:
+            async with mcp_app.lifespan(mcp_app):  # MUST be nested (Pitfall 1)
+                yield
+        finally:
+            DatasetteClient.reset(token)
+
+
+async def healthz(_request):
+    # OBS-01: liveness only — never consult upstream
+    return JSONResponse({"status": "ok"})
+
+
+app = Starlette(
+    routes=[
+        Route("/healthz", healthz),
+        Mount("/mcp", app=mcp_app),
+    ],
+    middleware=[
+        # Outermost first. Request-ID binds the contextvar so subsequent
+        # rejects (Origin) carry it in their log line.
+        Middleware(RequestIdMiddleware),
+        Middleware(
+            OriginAllowlistMiddleware,
+            allowed_origins=config.ALLOWED_ORIGINS,
+        ),
+    ],
+    lifespan=lifespan,
+)
