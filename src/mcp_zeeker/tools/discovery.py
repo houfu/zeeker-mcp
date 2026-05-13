@@ -243,10 +243,6 @@ async def describe_table(
     ]
 
     column_types_map = await DatasetteClient.current().get_table_column_types(database)
-    types_for_table = {
-        **column_types_map.get(table, {}),
-        **config.COLUMN_TYPES.get(f"{database}.{table}", {}),
-    }
     # upstream wins: start from config fallback then overlay upstream
     types_for_table = {
         **config.COLUMN_TYPES.get(f"{database}.{table}", {}),
