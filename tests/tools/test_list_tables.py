@@ -53,28 +53,29 @@ def _empty_metadata_stub() -> dict:
 
 
 @pytest.fixture
-def datasette_client(httpx_mock: pytest_httpx.HTTPXMock) -> DatasetteClient:
+async def datasette_client(httpx_mock: pytest_httpx.HTTPXMock) -> DatasetteClient:
     """Bind a DatasetteClient without pre-stubbing upstream (tests supply custom payloads)."""
-    http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
-    dc = DatasetteClient(http)
-    token = DatasetteClient.bind(dc)
-    yield dc
-    DatasetteClient.reset(token)
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        dc = DatasetteClient(http)
+        token = DatasetteClient.bind(dc)
+        yield dc
+        DatasetteClient.reset(token)
 
 
 @pytest.fixture
-def metadata_cache(httpx_mock: pytest_httpx.HTTPXMock) -> MetadataCache:
+async def metadata_cache(httpx_mock: pytest_httpx.HTTPXMock) -> MetadataCache:
     """Bind a MetadataCache with empty metadata (tests use config fallback)."""
     httpx_mock.add_response(
         url=_metadata_url(),
         json=_empty_metadata_stub(),
         is_reusable=True,
     )
-    mc = MetadataCache(httpx.AsyncClient(base_url=config.UPSTREAM_URL), config.UPSTREAM_URL, ttl=0)
-    token = MetadataCache.bind(mc)
-    yield mc
-    MetadataCache.reset(token)
-    MetadataCache.clear_singleton()
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
+        token = MetadataCache.bind(mc)
+        yield mc
+        MetadataCache.reset(token)
+        MetadataCache.clear_singleton()
 
 
 async def test_visible_tables_only(
@@ -179,20 +180,21 @@ async def test_description_uses_upstream_when_present(
         },
         is_reusable=True,
     )
-    mc = MetadataCache(httpx.AsyncClient(base_url=config.UPSTREAM_URL), config.UPSTREAM_URL, ttl=0)
-    token = MetadataCache.bind(mc)
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
+        token = MetadataCache.bind(mc)
 
-    try:
-        httpx_mock.add_response(
-            url=_db_url("zeeker-judgements"),
-            json=_tables_payload([{"name": "judgments", "hidden": False, "count": 100, "columns": [], "primary_keys": []}]),
-        )
-        envelope = await list_tables("zeeker-judgements")
+        try:
+            httpx_mock.add_response(
+                url=_db_url("zeeker-judgements"),
+                json=_tables_payload([{"name": "judgments", "hidden": False, "count": 100, "columns": [], "primary_keys": []}]),
+            )
+            envelope = await list_tables("zeeker-judgements")
 
-        assert envelope.data[0]["description"] == "Upstream description wins"
-    finally:
-        MetadataCache.reset(token)
-        MetadataCache.clear_singleton()
+            assert envelope.data[0]["description"] == "Upstream description wins"
+        finally:
+            MetadataCache.reset(token)
+            MetadataCache.clear_singleton()
 
 
 async def test_description_falls_back_to_config(

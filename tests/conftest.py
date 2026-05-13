@@ -162,37 +162,37 @@ def stub_upstream(httpx_mock: pytest_httpx.HTTPXMock):
 
 
 @pytest.fixture
-def bound_datasette_client(stub_upstream):
+async def bound_datasette_client(stub_upstream):
     """
     Bind a DatasetteClient backed by a real httpx.AsyncClient to the current context.
 
     The stub_upstream fixture is depended on to ensure upstream calls are intercepted.
-    Tears down the binding on fixture teardown.
+    Tears down the binding and closes the HTTP client on fixture teardown.
     """
-    http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
-    dc = DatasetteClient(http)
-    token = DatasetteClient.bind(dc)
-    yield dc
-    DatasetteClient.reset(token)
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        dc = DatasetteClient(http)
+        token = DatasetteClient.bind(dc)
+        yield dc
+        DatasetteClient.reset(token)
 
 
 @pytest.fixture
-def bound_metadata_cache(httpx_mock: pytest_httpx.HTTPXMock):
+async def bound_metadata_cache(httpx_mock: pytest_httpx.HTTPXMock):
     """
     Bind a MetadataCache backed by a real httpx.AsyncClient to the current context.
 
     Stubs /-/metadata.json with METADATA_STUB (is_reusable=True allows TTL/force_refresh tests).
     Uses ttl=0 to force re-fetch on every call (makes TTL-expiry tests simple).
-    Tears down the binding and clears the singleton on fixture teardown.
+    Tears down the binding, clears the singleton, and closes the HTTP client on teardown.
     """
     httpx_mock.add_response(
         url=f"{config.UPSTREAM_URL}/-/metadata.json",
         json=METADATA_STUB,
         is_reusable=True,
     )
-    http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
-    mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
-    token = MetadataCache.bind(mc)
-    yield mc
-    MetadataCache.reset(token)
-    MetadataCache.clear_singleton()
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
+        token = MetadataCache.bind(mc)
+        yield mc
+        MetadataCache.reset(token)
+        MetadataCache.clear_singleton()

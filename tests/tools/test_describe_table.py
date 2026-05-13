@@ -99,28 +99,29 @@ def _judgments_schema_payload() -> dict:
 
 
 @pytest.fixture
-def datasette_client(httpx_mock: pytest_httpx.HTTPXMock) -> DatasetteClient:
+async def datasette_client(httpx_mock: pytest_httpx.HTTPXMock) -> DatasetteClient:
     """Bind a DatasetteClient without pre-stubbing upstream (tests supply custom payloads)."""
-    http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
-    dc = DatasetteClient(http)
-    token = DatasetteClient.bind(dc)
-    yield dc
-    DatasetteClient.reset(token)
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        dc = DatasetteClient(http)
+        token = DatasetteClient.bind(dc)
+        yield dc
+        DatasetteClient.reset(token)
 
 
 @pytest.fixture
-def metadata_cache(httpx_mock: pytest_httpx.HTTPXMock) -> MetadataCache:
+async def metadata_cache(httpx_mock: pytest_httpx.HTTPXMock) -> MetadataCache:
     """Bind a MetadataCache with empty metadata (tests use config fallback by default)."""
     httpx_mock.add_response(
         url=_metadata_url(),
         json={"databases": {}},
         is_reusable=True,
     )
-    mc = MetadataCache(httpx.AsyncClient(base_url=config.UPSTREAM_URL), config.UPSTREAM_URL, ttl=0)
-    token = MetadataCache.bind(mc)
-    yield mc
-    MetadataCache.reset(token)
-    MetadataCache.clear_singleton()
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
+        token = MetadataCache.bind(mc)
+        yield mc
+        MetadataCache.reset(token)
+        MetadataCache.clear_singleton()
 
 
 async def test_locked_field_set(

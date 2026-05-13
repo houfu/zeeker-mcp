@@ -46,13 +46,13 @@ def _tables_payload_with_hidden(visible: list[str], hidden: list[str]) -> dict:
 
 
 @pytest.fixture
-def bound_client(httpx_mock: pytest_httpx.HTTPXMock):
+async def bound_client(httpx_mock: pytest_httpx.HTTPXMock):
     """Bind a DatasetteClient to the current context for the duration of the test."""
-    http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
-    dc = DatasetteClient(http)
-    token = DatasetteClient.bind(dc)
-    yield dc
-    DatasetteClient.reset(token)
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        dc = DatasetteClient(http)
+        token = DatasetteClient.bind(dc)
+        yield dc
+        DatasetteClient.reset(token)
 
 
 async def test_list_databases(
