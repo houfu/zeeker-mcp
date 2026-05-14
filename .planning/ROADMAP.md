@@ -144,7 +144,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 06-01-PLAN.md — Foundation: config.py extensions (LICENSES tuple + CONTENT_POLICIES + CITATION_TEMPLATES + HEAVY_COLUMNS += _policy), Provenance.license_url, MetadataCache.license_for/license_for_sync, RetrievedAtMiddleware module, _SafeDict citation helper, frozen_retrieved_at fixture, shared tests/_corpus/hostile_inputs.py, 3 new green tests + 4 Wave-0 RED stubs
-- [ ] 06-02-PLAN.md — Walking slice: register RetrievedAtMiddleware FIRST in server.py, rewire 4 envelope factories, per-row license on list_databases/search, per-row citation on query_table/fetch/search, _policy attachment in query_table heavy-reshape, broaden tests/test_tool_trailer.py to registry iteration
+- [x] 06-02-PLAN.md — Walking slice: register RetrievedAtMiddleware FIRST in server.py, rewire 4 envelope factories, per-row license on list_databases/search, per-row citation on query_table/fetch/search, _policy attachment in query_table heavy-reshape, broaden tests/test_tool_trailer.py to registry iteration
 - [ ] 06-03-PLAN.md — Tail: fill 4 Wave-0 stubs GREEN (envelope snapshot, content policy emission, citation synthesis, 5×3 hostile-input fan-out) + manual UAT with F-4 dry-run + operator review checkpoint for 5 [OPERATOR REVIEW] CONTENT_POLICIES rows
 **UI hint**: no
 **Research flag**: standard patterns — `/gsd-research-phase` optional
