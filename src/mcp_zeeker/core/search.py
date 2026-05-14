@@ -52,7 +52,7 @@ import anyio
 import structlog
 
 from mcp_zeeker import config
-from mcp_zeeker.core.citation import synthesize_citation
+from mcp_zeeker.core.citation import placeholder_columns, synthesize_citation
 from mcp_zeeker.core.datasette_client import DatasetteClient, UpstreamCallFailed
 from mcp_zeeker.core.metadata_cache import MetadataCache
 from mcp_zeeker.core.middleware.retrieved_at import get_tool_started_at
@@ -188,10 +188,25 @@ async def _one_table(
     # is prepended automatically by DatasetteClient.get_table_rows.
     # `_col` projection skips any preview field whose resolved column is None
     # (D4-12 — date/summary may legitimately be unmapped).
+    # D6.1-02 / Finding #2: transparent citation-column augmentation for
+    # search rows. `preview` resolves to up to 4 upstream column names
+    # (title / date / summary / url); a citation template may reference
+    # additional columns (e.g., judgments uses {case_name}, {citation},
+    # {court}, {decision_date}, {source_url} — only {source_url} overlaps
+    # `preview["url"]`). Add the missing columns to `_col` so the row dict
+    # `r` has values for synthesize_citation to substitute; the per-row
+    # normalize loop below emits only the fixed 9 keys, so the augmented
+    # columns are naturally not leaked at the row top level — no strip
+    # needed (whitelist-shaped reshape).
+    search_template = config.CITATION_TEMPLATES.get((db, table), config.DEFAULT_CITATION_TEMPLATE)
+    search_placeholders = placeholder_columns(search_template)
+    search_preview_cols = {c for c in preview.values() if c is not None}
+    search_added_columns = search_placeholders - search_preview_cols
     params: list[tuple[str, str]] = [
         ("_search", escaped),
         ("_size", str(per_table_limit)),
         *[("_col", c) for c in preview.values() if c is not None],
+        *[("_col", c) for c in sorted(search_added_columns)],
     ]
     try:
         result = await DatasetteClient.current().get_table_rows(db, table, params)

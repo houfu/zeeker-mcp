@@ -365,7 +365,22 @@ async def test_filter_contains_compiles_to_contains_op(
 async def test_columns_allowlist_passed_as_repeated_col_keys(
     datasette_client, metadata_cache, httpx_mock: pytest_httpx.HTTPXMock
 ) -> None:
-    """QUERY-01: columns=[a,b] → _col=a&_col=b (repeated key) to Datasette."""
+    """QUERY-01: columns=[a,b] → _col=a&_col=b (repeated key) to Datasette.
+
+    Phase 6.1 / D6.1-02 update: when the caller narrows `columns=` past a
+    CITATION_TEMPLATES placeholder column, those placeholder columns are
+    silently appended to the upstream `_col=` list (sorted, deterministic)
+    so synthesize_citation has values to substitute. They are stripped from
+    the response row dict before envelope emission — see
+    test_citation_synthesis.py::test_citation_populated_under_narrow_columns_projection.
+
+    For zeeker-judgements.judgments the template is
+    `"{case_name} {citation} ({court}, {decision_date}) — {source_url}"`.
+    Caller passes `columns=["citation", "case_name"]` — the placeholders
+    `case_name` and `citation` are already in the caller set, so the
+    augmentation adds the remaining `court`, `decision_date`, `source_url`
+    in sorted order after the caller-supplied entries.
+    """
     httpx_mock.add_response(
         url=_db_url("zeeker-judgements"), json=_judgments_db_payload(), is_reusable=True
     )
@@ -384,8 +399,15 @@ async def test_columns_allowlist_passed_as_repeated_col_keys(
 
     table_reqs = _table_requests(httpx_mock, "zeeker-judgements", "judgments")
     cols = table_reqs[0].url.params.get_list("_col")
-    # Repeated _col keys preserved as a list — order matches caller's input.
-    assert cols == ["citation", "case_name"], f"unexpected _col list: {cols}"
+    # D6.1-02: caller columns first (preserving caller order), then sorted
+    # augmented placeholder columns — `court`, `decision_date`, `source_url`.
+    assert cols == [
+        "citation",
+        "case_name",
+        "court",
+        "decision_date",
+        "source_url",
+    ], f"unexpected _col list: {cols}"
 
 
 # ---------------------------------------------------------------------------
