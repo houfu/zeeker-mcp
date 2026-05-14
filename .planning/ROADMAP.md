@@ -141,7 +141,11 @@ Plans:
   3. A CI lint asserts that no tool handler returns a raw dict — every emission path runs through `EnvelopeBuilder`; a snapshot test per tool asserts `set(row.keys()) ∩ HEAVY_COLUMNS == ∅` and `set(row["retrieved_content"].keys()) ⊆ HEAVY_COLUMNS`.
   4. A CI assertion verifies that every registered tool description ends with the exact `TOOL_TRAILER` constant; build fails on drift.
   5. A hostile-input test corpus (canary tokens, `</system>`, FTS5 operators, 5 KB random strings, malformed UTF-8) passes through `query_table`, `search`, and `fetch` without any user-supplied filter value appearing in any error message, log line, or LLM-readable metadata field.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 06-01-PLAN.md — Foundation: config.py extensions (LICENSES tuple + CONTENT_POLICIES + CITATION_TEMPLATES + HEAVY_COLUMNS += _policy), Provenance.license_url, MetadataCache.license_for/license_for_sync, RetrievedAtMiddleware module, _SafeDict citation helper, frozen_retrieved_at fixture, shared tests/_corpus/hostile_inputs.py, 3 new green tests + 4 Wave-0 RED stubs
+- [ ] 06-02-PLAN.md — Walking slice: register RetrievedAtMiddleware FIRST in server.py, rewire 4 envelope factories, per-row license on list_databases/search, per-row citation on query_table/fetch/search, _policy attachment in query_table heavy-reshape, broaden tests/test_tool_trailer.py to registry iteration
+- [ ] 06-03-PLAN.md — Tail: fill 4 Wave-0 stubs GREEN (envelope snapshot, content policy emission, citation synthesis, 5×3 hostile-input fan-out) + manual UAT with F-4 dry-run + operator review checkpoint for 5 [OPERATOR REVIEW] CONTENT_POLICIES rows
 **UI hint**: no
 **Research flag**: standard patterns — `/gsd-research-phase` optional
 
@@ -202,7 +206,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Structured retrieval + URL-keyed fetch | 4/4 | Complete    | 2026-05-14 |
 | 4. Cross-database search | 0/4 | Not started | - |
 | 5. Transparent fragment-parent joins | 0/TBD | Not started | - |
-| 6. Envelope hardening + injection-resistance labelling | 0/TBD | Not started | - |
+| 6. Envelope hardening + injection-resistance labelling | 0/3 | Not started | - |
 | 7. Rate limit + structured errors + healthz + logs | 0/TBD | Not started | - |
 | 8. Full tests + 24h soak | 0/TBD | Not started | - |
 | 9. Submission PR to anthropics/claude-for-legal | 0/TBD | Not started | - |
