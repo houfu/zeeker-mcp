@@ -245,6 +245,82 @@ def _synth_intermediate_page(page_num: int, template_row: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Plan 05-03 — synthetic 1500-fragment walk helper (FRAG-04)
+# ---------------------------------------------------------------------------
+
+
+def _synth_page(
+    page_num: int,
+    *,
+    total_pages: int = 15,
+    page_size: int = 100,
+    parent_id: str = "synth_parent_15hundred",
+) -> dict:
+    """Build one synthetic 100-row fragments page for the 1500-frag walk.
+
+    page_num is 0-indexed. Each row carries:
+      ordinal = page_num * page_size + i for i in range(page_size)
+      id      = f"synth_judg_{ordinal:04d}"
+
+    The terminal page (page_num == total_pages - 1) has `next = None`;
+    intermediate pages have `next = f"{last_ord},{last_id}"` per the Datasette
+    `_next` token wire format (RESEARCH §4.3). `truncated` stays False on
+    every page; `filtered_table_rows_count` is None per the `_nocount=1`
+    response shape (RESEARCH §4.4). Column order mirrors the captured
+    `large_page1.json` fixture exactly so the envelope-build path sees the
+    same shape as production.
+
+    The synthetic payload includes `id` and `judgment_id` at the top level
+    (matching real Datasette responses); the handler's HIDDEN_COLUMNS strips
+    both before they reach the envelope (FRAG-02).
+    """
+    start_ord = page_num * page_size
+    rows = [
+        {
+            "id": f"synth_judg_{start_ord + i:04d}",
+            "judgment_id": parent_id,
+            "ordinal": start_ord + i,
+            "paragraph_number": start_ord + i,
+            "class_name": "Synth-Para",
+            "section_heading": None,
+            "content_text": f"Synthetic fragment {start_ord + i} of the 1500-row regression.",
+            "html_raw": None,
+            "footnote_text": None,
+            "has_footnotes": 0,
+            "has_table": 0,
+            "has_figure": 0,
+            "figure_src": None,
+            "figure_descriptions": None,
+        }
+        for i in range(page_size)
+    ]
+    last = rows[-1]
+    has_next = page_num < total_pages - 1
+    return {
+        "rows": rows,
+        "columns": [
+            "id",
+            "judgment_id",
+            "ordinal",
+            "paragraph_number",
+            "class_name",
+            "section_heading",
+            "content_text",
+            "html_raw",
+            "footnote_text",
+            "has_footnotes",
+            "has_table",
+            "has_figure",
+            "figure_src",
+            "figure_descriptions",
+        ],
+        "next": f"{last['ordinal']},{last['id']}" if has_next else None,
+        "truncated": False,
+        "filtered_table_rows_count": None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # FRAG-01 — three-pair happy path
 # ---------------------------------------------------------------------------
 
@@ -486,15 +562,256 @@ async def test_957_fragment_walk(
 
 
 # ---------------------------------------------------------------------------
-# FRAG-04 — 1500-fragment synthetic walk (RED stub — Plan 05-03 owns)
+# FRAG-04 — 1500-fragment synthetic walk
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_1500_fragment_walk_synthetic() -> None:
-    """Plan 05-03 body-fill via the `_synth_page(page_num, has_next)` helper.
-    Each page contains 100 synthetic rows with ordinal 0..1499 and id
-    "synth_judg_NNNN"; `next` is `"<last_ord>,<last_id>"` when has_next else
-    None; `truncated: false`; `filtered_table_rows_count: null` per the
-    `_nocount=1` response shape per 05-RESEARCH §4.4."""
-    pytest.skip("RED until Plan 05-03 ships 1500-frag synthetic regression — FRAG-04")
+async def test_1500_fragment_walk_synthetic(
+    bound_parent_pk_cache,
+    datasette_client,
+    metadata_cache,
+    httpx_mock: pytest_httpx.HTTPXMock,
+) -> None:
+    """FRAG-04: 15 synthetic page responses walked end-to-end via the keyset
+    cursor — zero row loss, `truncated=False` on every page, terminal
+    `next_cursor=None` on page 15. Verifies the qhash stays stable across all
+    15 pages of identical-shape requests (D5-06) and that the keyset cursor
+    encode/decode round-trip is durable beyond Datasette's 1000-row cap.
+    """
+    synth_url = "https://synth.example.gov.sg/case/15hundred"
+    synth_parent_id = "synth_parent_15hundred"
+
+    # Build a synthetic parent_lookup by mutating the captured fixture.
+    parent_lookup = copy.deepcopy(
+        _load_fragments_fixture("zeeker_judgements__judgments__parent_lookup.json")
+    )
+    parent_lookup["rows"][0]["id"] = synth_parent_id
+    parent_lookup["rows"][0]["source_url"] = synth_url
+    parent_lookup["filtered_table_rows_count"] = 1
+
+    # DB metadata + schema stubs — re-usable across the walk.
+    httpx_mock.add_response(
+        url=_db_url("zeeker-judgements"), json=_judgments_db_payload(), is_reusable=True
+    )
+    httpx_mock.add_response(
+        url=_zeeker_schemas_url("zeeker-judgements"),
+        json=_empty_schema_payload(),
+        is_reusable=True,
+    )
+    # Parent lookup — fires on every walk step because bound_parent_pk_cache
+    # uses ttl=0 (Plan 05-01 default). Mark reusable so 15 walk steps share
+    # one stub.
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments"),
+        json=parent_lookup,
+        is_reusable=True,
+    )
+
+    # Stub 15 synthetic fragment pages in walk order. Ordered consumption —
+    # do NOT use `is_reusable=True` (02-LEARNINGS).
+    for page_num in range(15):
+        httpx_mock.add_response(
+            url=_table_url_re("zeeker-judgements", "judgments_fragments"),
+            json=_synth_page(page_num),
+        )
+
+    # Walk via repeated query_table calls; accumulate rows; safety bound to
+    # fail fast on infinite-loop regression.
+    all_rows: list[dict] = []
+    cursor: str | None = None
+    pages_walked = 0
+    max_pages = 20  # safety bound
+    while pages_walked < max_pages:
+        envelope = await query_table(
+            database="zeeker-judgements",
+            table="judgments_fragments",
+            filters=[Filter(column="source_url", op="exact", value=synth_url)],
+            cursor=cursor,
+            limit=100,
+        )
+        pages_walked += 1
+        all_rows.extend(envelope.data)
+        assert envelope.pagination is not None
+        assert envelope.pagination.truncated is False, (
+            f"page {pages_walked} reports truncated=True (synthetic data is honest=False)"
+        )
+        cursor = envelope.pagination.next_cursor
+        if cursor is None:
+            break
+
+    # Post-walk assertions — FRAG-04 contract.
+    assert pages_walked == 15, f"expected 15 pages, walked {pages_walked}"
+    assert cursor is None, "terminal page (15) must produce next_cursor=None"
+    assert len(all_rows) == 1500, f"expected 1500 rows total, got {len(all_rows)}"
+
+    # Ordinals strictly monotonically equal range(1500) — every fragment
+    # accounted for, no row loss to Datasette's 1000-row cap (T-05-20).
+    ordinals = [row["ordinal"] for row in all_rows if "ordinal" in row]
+    assert ordinals == list(range(1500)), (
+        f"ordinals must be exactly [0..1499] sorted; "
+        f"first={ordinals[:3]!r}, last={ordinals[-3:]!r}, len={len(ordinals)}"
+    )
+
+    # FRAG-02 carry-forward — id / judgment_id MUST NOT appear at row top
+    # level (HIDDEN_COLUMNS strips them).
+    forbidden = {"id", "judgment_id"}
+    for row in all_rows:
+        leaked = set(row.keys()) & forbidden
+        assert not leaked, f"forbidden keys leaked into row: {leaked}"
+
+
+# ---------------------------------------------------------------------------
+# FRAG-04 — pagination.truncated honesty (T-05-21)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("truncated_value", [True, False])
+async def test_pagination_truncated_honesty(
+    bound_parent_pk_cache,
+    datasette_client,
+    metadata_cache,
+    httpx_mock: pytest_httpx.HTTPXMock,
+    truncated_value: bool,
+) -> None:
+    """T-05-21: `envelope.pagination.truncated` mirrors the upstream
+    `result["truncated"]` verbatim — no silent override. Tested across both
+    True and False upstream values. Confirms Plan 05-02 Task 2 did not alter
+    Phase 3's truncation pass-through despite the new `_nocount=1` injection.
+    """
+    parent_lookup = _load_fragments_fixture("zeeker_judgements__judgments__parent_lookup.json")
+    # Build a synthetic single-page payload (small — 10 rows) and force the
+    # `truncated` field to the parametrized value.
+    page = _synth_page(0, total_pages=1, page_size=10)
+    page["truncated"] = truncated_value
+    # Single-page response → next must be None (synthesizing a 1-page walk).
+    page["next"] = None
+
+    httpx_mock.add_response(
+        url=_db_url("zeeker-judgements"), json=_judgments_db_payload(), is_reusable=True
+    )
+    httpx_mock.add_response(
+        url=_zeeker_schemas_url("zeeker-judgements"),
+        json=_empty_schema_payload(),
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments"),
+        json=parent_lookup,
+    )
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments_fragments"),
+        json=page,
+    )
+
+    envelope = await query_table(
+        database="zeeker-judgements",
+        table="judgments_fragments",
+        filters=[
+            Filter(
+                column="source_url",
+                op="exact",
+                value="https://www.elitigation.sg/gd/s/2026_SGFC_46",
+            )
+        ],
+    )
+
+    assert envelope.pagination is not None
+    assert envelope.pagination.truncated is truncated_value, (
+        f"envelope.pagination.truncated must mirror upstream value "
+        f"{truncated_value!r}; got {envelope.pagination.truncated!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# D5-04 / T-05-22 — ParentPKCache positive-hit suppresses Call 1
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def bound_parent_pk_cache_ttl60():
+    """Override of Plan 05-01's `bound_parent_pk_cache` (ttl=0) with a
+    60-second TTL so the cache positive-hit actually persists between two
+    sequential query_table calls in the same test."""
+    from mcp_zeeker.core.fragment_join import ParentPKCache
+
+    cache = ParentPKCache(ttl=60)
+    token = ParentPKCache.bind(cache)
+    yield cache
+    ParentPKCache.reset(token)
+    ParentPKCache.clear_singleton()
+
+
+async def test_parent_pk_cache_hit_skips_call_1(
+    bound_parent_pk_cache_ttl60,
+    datasette_client,
+    metadata_cache,
+    httpx_mock: pytest_httpx.HTTPXMock,
+) -> None:
+    """T-05-22 / D5-04: a SECOND query_table call with the same URL within
+    the ParentPKCache TTL fires only Call 2 (no Call 1). Confirms the cache
+    actually stores positive entries (a bug where the lock acquires but
+    `_data` is never written would trip this assertion)."""
+    parent_lookup = _load_fragments_fixture("zeeker_judgements__judgments__parent_lookup.json")
+    fragments_page = _load_fragments_fixture("zeeker_judgements__judgments_fragments__page1.json")
+    probe_url = "https://www.elitigation.sg/gd/s/2026_SGFC_46"
+
+    httpx_mock.add_response(
+        url=_db_url("zeeker-judgements"), json=_judgments_db_payload(), is_reusable=True
+    )
+    httpx_mock.add_response(
+        url=_zeeker_schemas_url("zeeker-judgements"),
+        json=_empty_schema_payload(),
+        is_reusable=True,
+    )
+    # Call 1 — register ONCE (not reusable). If the cache fails to store the
+    # positive entry the second call will fire a second parent lookup and
+    # pytest_httpx will raise (no matching response).
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments"),
+        json=parent_lookup,
+    )
+    # Call 2 — registered TWICE, ordered. Both calls hit the fragments table.
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments_fragments"),
+        json=fragments_page,
+    )
+    httpx_mock.add_response(
+        url=_table_url_re("zeeker-judgements", "judgments_fragments"),
+        json=fragments_page,
+    )
+
+    # First call — fires Call 1 + Call 2.
+    env1 = await query_table(
+        database="zeeker-judgements",
+        table="judgments_fragments",
+        filters=[Filter(column="source_url", op="exact", value=probe_url)],
+    )
+    assert len(env1.data) >= 1
+
+    # Second call — should HIT the ParentPKCache; fires Call 2 only.
+    env2 = await query_table(
+        database="zeeker-judgements",
+        table="judgments_fragments",
+        filters=[Filter(column="source_url", op="exact", value=probe_url)],
+    )
+    assert len(env2.data) >= 1
+
+    # Count actual upstream requests against the two table endpoints.
+    parent_table_calls = 0
+    fragment_table_calls = 0
+    for req in httpx_mock.get_requests():
+        url_str = str(req.url)
+        if "/zeeker-judgements/judgments.json" in url_str:
+            parent_table_calls += 1
+        elif "/zeeker-judgements/judgments_fragments.json" in url_str:
+            fragment_table_calls += 1
+
+    assert parent_table_calls == 1, (
+        f"expected exactly ONE parent lookup (Call 1) across two query_table "
+        f"calls — ParentPKCache positive-hit should suppress the second; "
+        f"got {parent_table_calls} parent lookups"
+    )
+    assert fragment_table_calls == 2, (
+        f"expected exactly TWO fragments calls (Call 2 fires per query_table "
+        f"call); got {fragment_table_calls}"
+    )
