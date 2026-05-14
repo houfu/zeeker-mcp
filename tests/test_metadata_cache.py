@@ -216,13 +216,31 @@ async def test_license_for_falls_back_to_empty_when_unknown_db(bound_cache):
     assert result == ("", "")
 
 
-def test_license_for_sync_cold_cache_returns_empty():
-    """D6-04 cold-cache acceptance: license_for_sync returns ('', '') without await."""
+def test_license_for_sync_cold_cache_falls_back_to_config():
+    """D6.1-01 / Finding #1: cold-cache `license_for_sync` returns the
+    `config.LICENSES` fallback for known databases, NOT `("", "")`.
+
+    Phase 6 / D6-04 contract is "config-fallback on cold cache, upstream
+    `/-/metadata.json` value on warm cache". Plan 06.1-01 corrects the
+    cold-cache branch which previously short-circuited to `("", "")` and
+    surfaced empty license / license_url on every response served before
+    `_ensure_fresh()` first ran (manifested as Finding #1 — empty `license`
+    fields on `list_databases` rows immediately after server start).
+
+    A genuinely-unknown database (not in `self._data` AND not in
+    `config.LICENSES`) still returns `("", "")` — no exception.
+    """
     http = httpx.AsyncClient(base_url=config.UPSTREAM_URL)
     mc = MetadataCache(http, config.UPSTREAM_URL, ttl=0)
     # No _ensure_fresh call — _data is None
     assert mc._data is None
-    assert mc.license_for_sync("zeeker-judgements") == ("", "")
+    # Known database falls back to config.LICENSES (D6.1-01 fix).
+    assert mc.license_for_sync("zeeker-judgements") == (
+        "CC-BY-4.0",
+        "https://creativecommons.org/licenses/by/4.0/",
+    )
+    # Genuinely-unknown DB still returns ("", "") — no exception, no surfacing.
+    assert mc.license_for_sync("not-a-real-db") == ("", "")
 
 
 async def test_license_for_sync_warm_cache_returns_upstream(bound_cache):

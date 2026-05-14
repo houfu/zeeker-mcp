@@ -206,20 +206,32 @@ class MetadataCache:
         return config.LICENSES.get(database, ("", ""))
 
     def license_for_sync(self, database: str) -> tuple[str, str]:
-        """Synchronous license accessor for envelope factories (D6-04).
+        """Synchronous license accessor for envelope factories (D6-04 / D6.1-01).
 
-        Mirrors `license_for` but cannot await. Cold-cache acceptance per D6-04:
-        returns `("", "")` when `_data is None` (no upstream hit yet). Once the
-        async path warms `_data`, this sync accessor reads the same underlying
-        dict.
+        Mirrors `license_for` but cannot await. The D6-04 fallback chain is:
+
+          1. Warm cache + upstream non-empty `(license, license_url)` → upstream wins.
+          2. Warm cache + upstream silent (empty / missing) → `config.LICENSES`.
+          3. Cold cache (`_data is None`) → `config.LICENSES.get(database, ("", ""))`
+             — same config fallback as the warm-but-empty branch (D6.1-01 fix).
+          4. Unknown `database` in BOTH the cache AND `config.LICENSES` → `("", "")`.
 
         Plan 06-02 wires this into `Envelope.for_table_list` / `for_rows` because
         those factories run inside Pydantic constructor scope and cannot await.
+        Plan 06.1-01 (D6.1-01): the cold-cache branch previously short-circuited
+        to `("", "")`, which surfaced empty license/license_url on every
+        successful response served before the first `_ensure_fresh()` ran —
+        contradicting the D6-04 contract in 06-CONTEXT.md ("config-fallback on
+        cold cache, upstream `/-/metadata.json` value on warm cache"). The async
+        `license_for` is unaffected because it awaits `_ensure_fresh()` before
+        lookup and never observes the cold-cache state.
         """
         from mcp_zeeker import config
 
         if self._data is None:
-            return ("", "")
+            # D6.1-01 fix: cold cache falls back to config.LICENSES — same
+            # behavior as the warm-but-empty branch below.
+            return config.LICENSES.get(database, ("", ""))
         db_data = self._data.get(database, {})
         lic = db_data.get("license") or ""
         lurl = db_data.get("license_url") or ""
