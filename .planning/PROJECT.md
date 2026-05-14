@@ -65,7 +65,7 @@ Every successful response is **citation-ready, scope-bounded, and safe to feed b
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Six opinionated tools, no `execute_sql` | Opinionated surface is easier for an LLM to use correctly and easier to review | ✓ 5/6 shipped; `search` in Phase 4 |
+| Six opinionated tools, no `execute_sql` | Opinionated surface is easier for an LLM to use correctly and easier to review | ✓ 6/6 shipped (Phase 1–4 — `search` landed in Phase 4) |
 | Heavy text columns opt-in via `columns` only | Bounds default token cost; prevents accidental megabyte payloads | ✓ Phase 3 — `query_table` enforces |
 | Heavy content returned under `retrieved_content` key, never inlined | Visually unambiguous to a reading LLM that this is data, not instructions | ✓ Phase 3 — D3-19 snapshot; live byte-exact parity Desktop ↔ Code |
 | Single `config.py` for all denylists / mappings | One place to audit; one place to update when upstream schema evolves | ✓ Phase 3 — D3-04 single-source-of-truth (CR-01 fix added regression test for `URL_COLUMNS` + `HIDDEN_COLUMNS`) |
@@ -77,6 +77,8 @@ Every successful response is **citation-ready, scope-bounded, and safe to feed b
 | **D3-12 LOCKED error catalog** (6 codes for query_table + fetch) | Stable codes for log/metrics consumers; new codes require explicit catalog update | ✓ Phase 3 — `unknown_table`, `unknown_column`, `invalid_filter_op`, `invalid_cursor`, `unsupported_table_for_fetch`, `not_found` |
 | **FETCH-04**: `unsupported_table_for_fetch` distinct from `unknown_table` | Presence side-channel deliberately exposes "this table exists but is not URL-keyed" — bounded by `_resolve_table` running first so hidden tables emit `unknown_table` | ✓ Phase 3 — accepted risk T-03-19 |
 | **qhash cursor digest** (blake2b 8-byte) binds cursor to query shape | Catches sort/filter/columns drift across page boundaries; cursor is not a security primitive but the digest gives an honest contract | ✓ Phase 3 — live-verified S6 (shape-mismatch returns fixed-literal `invalid_cursor:` with no token echo) |
+| **D4-22 auto-discovery + override** for search: only `ALLOWED_DATABASES` and `HIDDEN_TABLES` are manual security boundaries; tables/preview-columns are derived from upstream metadata | Adding a fifth DB that follows naming conventions = zero per-table config edits; conventions are auditable, overrides cover outliers | ✓ Phase 4 — `SEARCH_DENYLIST_PATTERNS=("_fragments",)` + `SEARCH_PREVIEW_DEFAULTS` + empty `SEARCH_PREVIEW_OVERRIDES`; 12 tables auto-discovered across 3 DBs; pdpc returns zero searchable tables (no FTS upstream) without any special case |
+| **D4-09 `invalid_query` mapping** for FTS5 syntax errors: all-tables-400 → `invalid_query`; mixed/5xx → `upstream_unavailable` | Status-class discrimination via `UpstreamCallFailed.status` lets the orchestrator distinguish "your query is malformed" from "upstream is down" without echoing the query (INJ-05) | ✓ Phase 4 — `failure_statuses` 4-tuple from `fan_out_search`; locked-catalog reuse (D3-12) |
 
 ## Evolution
 
@@ -96,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-14 after Phase 3 (structured-retrieval-url-keyed-fetch)*
+*Last updated: 2026-05-14 after Phase 4 (cross-database-search)*

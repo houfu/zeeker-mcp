@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Skeleton transport + first tool** - Streamable HTTP `/mcp` endpoint live; `list_databases` returns the four Zeeker databases inside a stub provenance envelope
 - [ ] **Phase 2: Discovery surface + denylists** - `list_tables` and `describe_table` enforce hidden-table/column denylists with no presence side-channel
 - [x] **Phase 3: Structured retrieval + URL-keyed fetch** - `query_table` (11 filter operators, qhash cursor, light/heavy columns) and `fetch` (per-table URL mapping) work against real upstream (completed 2026-05-14)
-- [ ] **Phase 4: Cross-database search** - `search` runs FTS across the four databases with hidden-table stripping and preview-only rows
+- [x] **Phase 4: Cross-database search** - `search` runs FTS across the four databases with hidden-table stripping and preview-only rows (completed 2026-05-14)
 - [ ] **Phase 5: Transparent fragment-parent joins** - `query_table` on `*_fragments` tables resolves URL→parent PK→fragment FK transparently and paginates past Datasette's 1k-row cap
 - [ ] **Phase 6: Envelope hardening + injection-resistance labelling** - Single EnvelopeBuilder is the only emission path; every tool description ends with the fixed safety trailer
 - [ ] **Phase 7: Rate limit + structured errors + healthz + logs** - 20-burst/60-min/5k-24h token bucket; locked error catalog; liveness-only `/healthz`; structured JSON access logs
