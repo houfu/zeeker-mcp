@@ -40,9 +40,9 @@ DATABASE_DESCRIPTIONS: dict[str, str] = {
 # D2-09: platform-internal denylist + sglawwatch legacy hidden tables
 HIDDEN_TABLES: dict[str, set[str]] = {
     "zeeker-judgements": {"_zeeker_schemas", "_zeeker_updates"},
-    "pdpc":              {"_zeeker_schemas", "_zeeker_updates"},
-    "sg-gov-newsrooms":  {"_zeeker_schemas", "_zeeker_updates"},
-    "sglawwatch":        {"_zeeker_schemas", "_zeeker_updates", "metadata", "schema_versions"},
+    "pdpc": {"_zeeker_schemas", "_zeeker_updates"},
+    "sg-gov-newsrooms": {"_zeeker_schemas", "_zeeker_updates"},
+    "sglawwatch": {"_zeeker_schemas", "_zeeker_updates", "metadata", "schema_versions"},
 }
 
 # D2-10: flat dict keyed on "*" (global) or "<db>.<table>" (per-table);
@@ -56,73 +56,110 @@ HIDDEN_COLUMNS: dict[str, set[str]] = {
 
 # Phase 3 (FETCH-01) is the consumer; describe_table reads keys for url_keyed bool
 URL_COLUMNS: dict[str, str] = {
-    "zeeker-judgements.judgments":        "source_url",
-    "pdpc.enforcement_decisions":         "decision_url",
-    "sg-gov-newsrooms.acra_news":         "source_url",
-    "sg-gov-newsrooms.agc_news":          "source_url",
-    "sg-gov-newsrooms.ccs_news":          "source_url",
-    "sg-gov-newsrooms.ipos_news":         "source_url",
-    "sg-gov-newsrooms.judiciary_news":    "source_url",
-    "sg-gov-newsrooms.mlaw_news":         "source_url",
-    "sg-gov-newsrooms.mom_news":          "source_url",
-    "sg-gov-newsrooms.pdpc_news":         "source_url",
-    "sglawwatch.headlines":               "source_link",
-    "sglawwatch.commentaries":            "link",
-    "sglawwatch.about_singapore_law":     "item_url",
+    "zeeker-judgements.judgments": "source_url",
+    "pdpc.enforcement_decisions": "decision_url",
+    "sg-gov-newsrooms.acra_news": "source_url",
+    "sg-gov-newsrooms.agc_news": "source_url",
+    "sg-gov-newsrooms.ccs_news": "source_url",
+    "sg-gov-newsrooms.ipos_news": "source_url",
+    "sg-gov-newsrooms.judiciary_news": "source_url",
+    "sg-gov-newsrooms.mlaw_news": "source_url",
+    "sg-gov-newsrooms.mom_news": "source_url",
+    "sg-gov-newsrooms.pdpc_news": "source_url",
+    "sglawwatch.headlines": "source_link",
+    "sglawwatch.commentaries": "link",
+    "sglawwatch.about_singapore_law": "item_url",
 }
 
-# Phase 5 is consumer; describe_table reads keys for supports_fragments bool
+# Phase 5 is consumer; describe_table reads keys for supports_fragments bool.
+# parent_match_order_by is the column used by FRAG-06 multi-match resolution via
+# `_sort_desc=<col>&_size=1` upstream (NOT `_sort=-col` — Datasette rejects that
+# syntax with HTTP 500 per 05-RESEARCH §4.2 / Pitfall 1). `updated_at` does NOT
+# exist on any current parent table (05-RESEARCH §1 / Probe 1); per-table
+# fallbacks are MANDATORY, not optional.
 FRAGMENT_PARENTS: dict[str, dict] = {
     "zeeker-judgements.judgments_fragments": {
         "parent_table": "judgments",
         "parent_fk": "judgment_id",
         "parent_pk": "id",
         "order_by": "ordinal",
+        "parent_match_order_by": "created_at",
     },
     "sglawwatch.about_singapore_law_fragments": {
         "parent_table": "about_singapore_law",
         "parent_fk": "item_id",
         "parent_pk": "id",
         "order_by": "fragment_order",
+        "parent_match_order_by": "last_scraped",
     },
     "pdpc.enforcement_decisions_fragments": {
         "parent_table": "enforcement_decisions",
         "parent_fk": "parent_id",
         "parent_pk": "id",
         "order_by": "sequence",
+        "parent_match_order_by": "imported_on",
     },
 }
 
 # D2-11: heavy text excluded; describe_table reads this for the light vs available diff (DISC-04)
 LIGHT_COLUMNS: dict[str, list[str]] = {
     "zeeker-judgements.judgments": [
-        "citation", "case_name", "case_numbers", "decision_date", "court",
-        "subject_tags", "source_url", "pdf_url", "summary",
+        "citation",
+        "case_name",
+        "case_numbers",
+        "decision_date",
+        "court",
+        "subject_tags",
+        "source_url",
+        "pdf_url",
+        "summary",
     ],
     "zeeker-judgements.judgments_fragments": [
-        "ordinal", "paragraph_number", "class_name", "section_heading",
+        "ordinal",
+        "paragraph_number",
+        "class_name",
+        "section_heading",
     ],
     "pdpc.enforcement_decisions": [
-        "title", "organisation", "decision_type", "decision_date",
-        "decision_url", "penalty_amount", "summary",
+        "title",
+        "organisation",
+        "decision_type",
+        "decision_date",
+        "decision_url",
+        "penalty_amount",
+        "summary",
     ],
     "pdpc.enforcement_decisions_fragments": [
-        "sequence", "content_type", "char_count",
+        "sequence",
+        "content_type",
+        "char_count",
     ],
     # sg-gov-newsrooms tables (uniform schema)
-    "sg-gov-newsrooms.acra_news":     ["title", "published_date", "category", "source_url", "summary"],
-    "sg-gov-newsrooms.agc_news":      ["title", "published_date", "category", "source_url", "summary"],
-    "sg-gov-newsrooms.ccs_news":      ["title", "published_date", "category", "source_url", "summary"],
-    "sg-gov-newsrooms.ipos_news":     ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.acra_news": ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.agc_news": ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.ccs_news": ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.ipos_news": ["title", "published_date", "category", "source_url", "summary"],
     "sg-gov-newsrooms.judiciary_news": [
-        "title", "published_date", "content_type", "courts", "source_url", "summary",
+        "title",
+        "published_date",
+        "content_type",
+        "courts",
+        "source_url",
+        "summary",
     ],
-    "sg-gov-newsrooms.mlaw_news":     ["title", "published_date", "category", "source_url", "summary"],
-    "sg-gov-newsrooms.mom_news":      ["title", "published_date", "category", "source_url", "summary"],
-    "sg-gov-newsrooms.pdpc_news":     ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.mlaw_news": ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.mom_news": ["title", "published_date", "category", "source_url", "summary"],
+    "sg-gov-newsrooms.pdpc_news": ["title", "published_date", "category", "source_url", "summary"],
     # sglawwatch tables
-    "sglawwatch.headlines":           ["category", "title", "source_link", "author", "date", "summary"],
-    "sglawwatch.commentaries":        ["title", "author", "pub_date", "link", "content_type", "description"],
+    "sglawwatch.headlines": ["category", "title", "source_link", "author", "date", "summary"],
+    "sglawwatch.commentaries": [
+        "title",
+        "author",
+        "pub_date",
+        "link",
+        "content_type",
+        "description",
+    ],
     "sglawwatch.about_singapore_law": ["item_url", "title", "section", "home_page"],
     "sglawwatch.about_singapore_law_fragments": ["fragment_order", "char_count"],
 }

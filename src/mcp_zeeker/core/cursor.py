@@ -16,9 +16,12 @@ Security properties (auditable by inspection):
   Datasette's parameterized SQL boundary — the decoded `next` token flows
   through httpx URL-encoding and Datasette's own validation downstream.
 - ToolError messages are FIXED LITERALS — no f-string interpolation of cursor
-  contents (T-03-12 / INJ-05). The two strings the module ever raises are:
+  contents (T-03-12 / INJ-05). The three strings the module ever raises are:
     "invalid_cursor: cursor is malformed"
     "invalid_cursor: cursor does not match current request shape"
+    "invalid_cursor: keyset cursor is malformed"   # NEW (Phase 5 / D5-07)
+  The keyset variant reuses the locked `invalid_cursor` code (D3-12 / WR-02 —
+  message-suffix disambiguation; no new error code introduced).
 - The `|` separator between digest and `_next` is safe: live-probe verification
   in 03-RESEARCH confirmed Datasette tilde-encodes ASCII `|` to `~7C` in its
   emitted next tokens, so split-on-first-`|` is unambiguous.
@@ -137,3 +140,75 @@ def decode_cursor(cursor: str, canonical_shape_str_value: str) -> str:
         raise ToolError("invalid_cursor: cursor does not match current request shape")
 
     return datasette_next
+
+
+def encode_keyset_cursor(
+    canonical_shape_str_value: str,
+    last_order_by_value: int | str,
+    last_id: str,
+) -> str:
+    """Encode a fragment-join keyset cursor (D5-05 / D5-07 / Phase 5).
+
+    Carries `(qhash, last_order_by_value, last_id)` under the same BLAKE2b
+    digest + base64 + `|` discipline as `encode_cursor`. The internal payload
+    follows Datasette's native `_next` token shape `"<order_by>,<id>"` (comma-
+    separated) per 05-RESEARCH §4.3 — Datasette's keyset internally implements
+    the `(order_by, id)` tiebreak that FRAG-03 requires, so passing this back
+    via `?_next=<payload>` preserves the tiebreak without our handler needing
+    to construct manual `<col>__gt=<value>` clauses (manual `__gt=` would lose
+    the id tiebreak per RESEARCH §4.3 / Probe 4c).
+
+    All three current `order_by` columns are INTEGER per RESEARCH Probe 4b
+    (`ordinal`, `fragment_order`, `sequence`); Datasette's `_next` accepts the
+    stringified form correctly. `last_id` is the fragment table's primary
+    key — a TEXT composite like "66e73dfa5db4_0099" per RESEARCH §4.4.
+
+    FRAG-02 invariant: the cursor encodes ONLY `(last_order_by_value, last_id)`
+    on the fragment side — parent_pk is NEVER part of the cursor. parent_pk is
+    re-resolved each continuation call via ParentPKCache (D5-06).
+    """
+    digest = hashlib.blake2b(
+        canonical_shape_str_value.encode(), digest_size=8
+    ).hexdigest()  # 16 hex chars
+    raw = f"{digest}|{last_order_by_value},{last_id}"
+    return base64.urlsafe_b64encode(raw.encode()).rstrip(b"=").decode()
+
+
+def decode_keyset_cursor(
+    cursor: str,
+    canonical_shape_str_value: str,
+) -> tuple[str, str]:
+    """Decode a keyset cursor, verifying it matches the current shape (D5-07).
+
+    Returns `(last_order_by_value, last_id)` as strings (caller coerces if
+    needed; Datasette's `_next` accepts the string form per RESEARCH §4.3).
+
+    Failure modes — fixed-literal messages, NO f-string interpolation of
+    cursor contents (T-03-12 / INJ-05). Locked catalog code `invalid_cursor`
+    re-used per D3-12 / WR-02:
+        malformed → "invalid_cursor: keyset cursor is malformed"  # NEW (D5-07)
+            - not base64
+            - decoded bytes are not utf-8
+            - decoded string has no `|` separator
+            - post-`|` payload has no `,` separator
+            - any other unpacking failure
+        mismatch  → "invalid_cursor: cursor does not match current request shape"
+            - decoded digest does not match BLAKE2b(canonical_shape_str_value)
+            - REUSES Phase 3's existing fixed literal verbatim (locked-catalog
+              discipline; no new shape-drift message — D5-07)
+    """
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode(padded).decode()
+        digest_part, payload = raw.split("|", 1)
+        last_order_by_value, last_id = payload.split(",", 1)
+    except Exception:  # noqa: BLE001 — any decode failure → malformed
+        # `from None` suppresses the original exception chain so cursor contents
+        # cannot leak via __cause__ / __context__ (T-03-12 / INJ-05).
+        raise ToolError("invalid_cursor: keyset cursor is malformed") from None
+
+    expected = hashlib.blake2b(canonical_shape_str_value.encode(), digest_size=8).hexdigest()
+    if digest_part != expected:
+        raise ToolError("invalid_cursor: cursor does not match current request shape")
+
+    return last_order_by_value, last_id
