@@ -104,7 +104,7 @@ Plans:
   4. A malformed query that survives escaping and triggers an upstream FTS5 syntax error returns `invalid_query` from the locked error catalog — never `upstream_unavailable` or a pass-through 400.
 **Plans**: 4 plans
 Plans:
-- [ ] 04-01-PLAN.md — Foundation: config.py 3 globals + Pagination/Envelope extension + raise_invalid_query + TableSummary.fts_table + UpstreamCallFailed.status + core/fts_escape.py + core/search.py skeleton + tests/conftest.py consolidation + Wave 0 stubs
+- [x] 04-01-PLAN.md — Foundation: config.py 3 globals + Pagination/Envelope extension + raise_invalid_query + TableSummary.fts_table + UpstreamCallFailed.status + core/fts_escape.py + core/search.py skeleton + tests/conftest.py consolidation + Wave 0 stubs
 - [ ] 04-02-PLAN.md — Walking slice: core/search.py body (searchable_tables_for + fan_out_search) + tools/search.py @mcp.tool handler body + GREEN tests for happy paths / errors / side-channel / orchestrator
 - [ ] 04-03-PLAN.md — Hardening: auto-discovery FOUR-gate filter tests + INJ-05 hostile-input corpus (5 canaries × 2 paths)
 - [ ] 04-04-PLAN.md — Manual UAT: tests/manual/PHASE4-CLIENT-VERIFY.md (8 scenarios + F-4 dry-run sign-off)
