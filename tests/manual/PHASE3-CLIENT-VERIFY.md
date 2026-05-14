@@ -378,7 +378,7 @@ dry-run against the live target before marking this plan complete.
 - [ ] `evidence/03-retrieval/scenario-05-unsupported.png` captured
 - [ ] `evidence/03-retrieval/scenario-06-invalid-cursor.png` captured
 
-**Operator sign-off:** Verified on YYYY-MM-DD by <user>
+**Operator sign-off:** Verified on 2026-05-14 by houfu
 
 > This task is a `checkpoint:human-verify`. The automated agent has written this
 > checklist and committed it; the actual walk-through requires a human at a keyboard
