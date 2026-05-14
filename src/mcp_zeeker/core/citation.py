@@ -25,6 +25,7 @@ foundation here keeps the contract trivial to audit.
 
 from __future__ import annotations
 
+import string
 from collections import defaultdict
 from datetime import datetime
 
@@ -66,3 +67,30 @@ def synthesize_citation(database: str, table: str, row: dict, retrieved_at: date
     """
     template = config.CITATION_TEMPLATES.get((database, table), config.DEFAULT_CITATION_TEMPLATE)
     return template.format_map(_SafeDict(row, retrieved_at))
+
+
+def placeholder_columns(template: str) -> set[str]:
+    """Extract upstream column names referenced as `{name}` placeholders in `template`.
+
+    The synthetic `{retrieved_at}` placeholder (injected by `_SafeDict.__init__`
+    in this module) is filtered out — callers won't try to fetch it from
+    upstream Datasette.
+
+    D6.1-02 / Finding #2: consumed by the transparent citation-column
+    augmentation step in `query_table` / `fetch` / `search` row reshape.
+    When the caller's `columns=` argument excludes a template-referenced
+    column, those columns are silently added to the upstream `_col=`
+    projection so `synthesize_citation` has values to substitute; the
+    augmented columns are then stripped from the per-row response shape
+    before envelope emission (so the agent never sees columns it didn't
+    request).
+
+    Implementation: `string.Formatter().parse(template)` yields
+    `(literal_text, field_name, format_spec, conversion)` tuples; literal
+    segments produce `field_name is None` which we filter out.
+
+    Returns an empty set for templates with no placeholders.
+    """
+    names = {fn for _, fn, _, _ in string.Formatter().parse(template) if fn}
+    names.discard("retrieved_at")
+    return names

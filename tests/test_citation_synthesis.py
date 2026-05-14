@@ -30,12 +30,16 @@ IO. They exercise the citation helper directly.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from mcp_zeeker import config
-from mcp_zeeker.core.citation import _SafeDict, synthesize_citation
+from mcp_zeeker.core.citation import _SafeDict, placeholder_columns, synthesize_citation
+from mcp_zeeker.core.datasette_client import DatasetteClient
+from mcp_zeeker.core.middleware.retrieved_at import RetrievedAtMiddleware
 
 # ---------------------------------------------------------------------------
 # Per-(db, table) stub row dict — column names sourced verbatim from
@@ -237,3 +241,205 @@ def test_default_citation_template_renders_for_fragment_tables() -> None:
     )
     expected = " (retrieved 2026-01-01T00:00:00+00:00)"
     assert rendered == expected, f"fragment-table DEFAULT mismatch: {rendered!r}"
+
+
+# ---------------------------------------------------------------------------
+# D6.1-02 / Finding #2 — transparent citation-column augmentation when caller
+# narrows `columns=` past template-referenced placeholders.
+#
+# These tests dispatch via the in-memory mcp_client (full FastMCP middleware
+# chain) so they exercise the production augmentation path end-to-end. The
+# `passthrough_retrieved_at_middleware` fixture is duplicated here per the
+# Plan 06-03 single-plan-touch rule (cannot modify tests/conftest.py from
+# Plan 06.1).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def passthrough_retrieved_at_middleware(monkeypatch, frozen_retrieved_at):
+    """Bind the frozen instant via the production middleware seam.
+
+    Same fixture as tests/test_envelope_snapshot.py and
+    tests/test_content_policy_emission.py — duplicated per the single-plan-touch
+    rule on tests/conftest.py.
+    """
+    from mcp_zeeker.core.middleware.retrieved_at import tool_started_at
+
+    async def _bind_frozen(self, context, call_next):  # noqa: ARG001
+        token = tool_started_at.set(frozen_retrieved_at)
+        try:
+            return await call_next(context)
+        finally:
+            tool_started_at.reset(token)
+
+    monkeypatch.setattr(RetrievedAtMiddleware, "on_call_tool", _bind_frozen)
+
+
+@pytest.fixture
+async def bound_datasette_client_for_citation(httpx_mock):
+    """Bind a DatasetteClient for citation-augmentation tests.
+
+    Does NOT pull in `stub_upstream` — each test stubs the upstream payload
+    explicitly so the visible-tables surface only carries what the test needs.
+    """
+    async with httpx.AsyncClient(base_url=config.UPSTREAM_URL) as http:
+        dc = DatasetteClient(http)
+        token = DatasetteClient.bind(dc)
+        yield dc
+        DatasetteClient.reset(token)
+
+
+def _db_url(name: str) -> str:
+    base = config.UPSTREAM_URL.rstrip("/")
+    return f"{base}/{name}.json"
+
+
+def _table_url_re(database: str, table: str) -> re.Pattern[str]:
+    base = re.escape(config.UPSTREAM_URL.rstrip("/"))
+    return re.compile(rf"^{base}/{re.escape(database)}/{re.escape(table)}\.json(\?.*)?$")
+
+
+def _zeeker_schemas_url(database: str) -> str:
+    base = config.UPSTREAM_URL.rstrip("/")
+    return f"{base}/{database}/_zeeker_schemas.json"
+
+
+def test_placeholder_columns_extracts_template_names() -> None:
+    """D6.1-02: `placeholder_columns(template)` returns the set of `{name}`
+    field names, filtering out the synthetic `{retrieved_at}` placeholder.
+    """
+    # Judgments template — every placeholder is an upstream column name.
+    assert placeholder_columns(
+        "{case_name} {citation} ({court}, {decision_date}) — {source_url}"
+    ) == {"case_name", "citation", "court", "decision_date", "source_url"}
+    # DEFAULT template — `{retrieved_at}` is synthetic and MUST be filtered out.
+    assert placeholder_columns("{url} (retrieved {retrieved_at})") == {"url"}
+    # No placeholders — empty set, no exception.
+    assert placeholder_columns("no placeholders here") == set()
+    # Only the synthetic placeholder — empty set after the filter.
+    assert placeholder_columns("retrieved {retrieved_at}") == set()
+
+
+async def test_citation_populated_under_narrow_columns_projection(
+    mcp_client,
+    bound_datasette_client_for_citation,
+    bound_metadata_cache,
+    httpx_mock,
+    frozen_retrieved_at,
+    passthrough_retrieved_at_middleware,
+) -> None:
+    """D6.1-02 / Finding #2: when the caller narrows `columns=` past
+    template-referenced placeholder columns, the server silently augments
+    the upstream SELECT to include them, then strips them from the response
+    row dict so the agent never sees columns it didn't request.
+
+    Concretely, `query_table(database="zeeker-judgements", table="judgments",
+    columns=["content_text"], limit=1)` should now emit a row whose
+    `_citation` contains the substituted case_name string ("Foo v Bar"),
+    not the literal-punctuation empty form `"  (, ) — "`. The row's top-level
+    keys are exactly `{"_citation", "retrieved_content"}` — none of the
+    placeholder columns (`case_name`, `citation`, `court`, `decision_date`,
+    `source_url`) leak at the top level.
+    """
+    db, table = "zeeker-judgements", "judgments"
+    heavy_col = "content_text"
+
+    # Warm the metadata cache so the conftest /-/metadata.json mock is consumed.
+    await bound_metadata_cache.force_refresh()
+
+    # Build the visible upstream surface: every placeholder column the
+    # judgments template references plus the heavy column the caller asks for.
+    cols = [
+        "case_name",
+        "citation",
+        "court",
+        "decision_date",
+        "source_url",
+        "content_text",
+    ]
+    httpx_mock.add_response(
+        url=_db_url(db),
+        json={
+            "tables": [
+                {
+                    "name": table,
+                    "hidden": False,
+                    "count": 1,
+                    "columns": cols,
+                    "primary_keys": [],
+                    "fts_table": None,
+                }
+            ]
+        },
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=_zeeker_schemas_url(db),
+        json={
+            "columns": [
+                "resource_name",
+                "schema_version",
+                "schema_hash",
+                "column_definitions",
+                "created_at",
+                "updated_at",
+            ],
+            "rows": [],
+        },
+        is_reusable=True,
+    )
+    # The upstream stub row carries every placeholder column AND the heavy
+    # column. If augmentation works, the rendered `_citation` substitutes
+    # the placeholder values; the row dict only exposes _citation and
+    # retrieved_content at the top level.
+    stub_row = {
+        "case_name": "Foo v Bar",
+        "citation": "[2026] SGCA 1",
+        "court": "Court of Appeal",
+        "decision_date": "2026-01-15",
+        "source_url": "https://elit.example.test/123",
+        "content_text": "This is the heavy text.",
+    }
+    httpx_mock.add_response(
+        url=_table_url_re(db, table),
+        json={
+            "rows": [stub_row],
+            "columns": cols,
+            "next": None,
+            "truncated": False,
+            "filtered_table_rows_count": 1,
+        },
+        is_reusable=True,
+    )
+
+    result = await mcp_client.call_tool(
+        "query_table",
+        {"database": db, "table": table, "columns": [heavy_col], "limit": 1},
+    )
+    assert not result.is_error, f"query_table error: {result.content}"
+    rows = result.structured_content["data"]
+    assert len(rows) == 1, f"expected 1 row, got {len(rows)}"
+    row = rows[0]
+
+    # Assertion 1: `_citation` is non-empty.
+    citation = row.get("_citation")
+    assert citation, f"_citation missing or empty: {row!r}"
+    # Assertion 2: case_name is substituted into _citation.
+    assert "Foo v Bar" in citation, (
+        f"placeholder column 'case_name' did NOT substitute into _citation: {citation!r}"
+    )
+    # Assertion 3: NOT the empty-placeholder form Finding #2 captured.
+    assert citation != "  (, ) — ", f"empty-placeholder form leaked into _citation: {citation!r}"
+    # Assertion 4: the placeholder columns are NOT at the row top level —
+    # only `_citation` and `retrieved_content` (the heavy_col namespace).
+    top_level_keys = set(row.keys())
+    assert top_level_keys == {"_citation", "retrieved_content"}, (
+        f"unexpected top-level keys (placeholder columns leaked?): {top_level_keys}"
+    )
+    # Assertion 5: the caller's heavy column emits correctly under
+    # retrieved_content alongside the operator-locked _policy.
+    rc = row["retrieved_content"]
+    assert rc.get("content_text") == "This is the heavy text.", (
+        f"retrieved_content.content_text missing or wrong: {rc!r}"
+    )
+    assert "_policy" in rc, f"_policy missing from retrieved_content: {rc!r}"

@@ -54,7 +54,7 @@ from pydantic import Field
 
 from mcp_zeeker import config
 from mcp_zeeker.core import fragment_join  # Phase 5 / D5-01 — sole delegation point
-from mcp_zeeker.core.citation import synthesize_citation
+from mcp_zeeker.core.citation import placeholder_columns, synthesize_citation
 from mcp_zeeker.core.config_lookup import url_column_for
 from mcp_zeeker.core.cursor import (
     canonical_shape_str,
@@ -331,6 +331,29 @@ async def query_table(
         light_to_emit = [c for c in columns if c not in config.HEAVY_COLUMNS]
         heavy_to_emit = [c for c in columns if c in config.HEAVY_COLUMNS]
 
+    # Step 7.7 (D6.1-02 / Finding #2): transparent citation-column augmentation.
+    # When the caller narrows `columns=` past a template-referenced placeholder
+    # column, the synthesized `_citation` rendered as e.g. `"  (, ) — "` because
+    # _SafeDict substitutes empty strings for missing placeholders. The fix:
+    # silently add the placeholder columns to the upstream SELECT here, then
+    # strip them from each row dict in Step 13 AFTER `synthesize_citation`
+    # reads them — the agent never sees the augmentation at the row top level.
+    #
+    # Default-light path (`columns is None`) keeps `added_columns = set()` —
+    # the configured light set already includes the citation-template columns
+    # for every currently-templated table (verified by tests/test_citation_synthesis.py).
+    # Belt-and-suspenders: intersect with `visible` so a template referencing a
+    # hidden or unknown column cannot smuggle it into the upstream `_col=`.
+    template_for_aug = config.CITATION_TEMPLATES.get(
+        (database, table), config.DEFAULT_CITATION_TEMPLATE
+    )
+    placeholder_cols = placeholder_columns(template_for_aug)
+    if columns is not None:
+        caller_cols = set(light_to_emit) | set(heavy_to_emit)
+        added_columns: set[str] = (placeholder_cols - caller_cols) & visible
+    else:
+        added_columns = set()
+
     # Step 8: build sort param (D3-08, Datasette _sort / _sort_desc mapping)
     if sort and sort.startswith("-"):
         sort_params: list[tuple[str, str]] = [("_sort_desc", sort.lstrip("-"))]
@@ -412,7 +435,10 @@ async def query_table(
     # Step 10: compose Datasette params; _shape=objects is prepended by get_table_rows.
     # upstream_cols = light + heavy so Datasette returns every column we plan to
     # emit (heavy values get re-keyed under retrieved_content in step 11).
-    upstream_cols = [*light_to_emit, *heavy_to_emit]
+    # D6.1-02: append augmented placeholder columns to the upstream _col= list
+    # so Datasette returns them for synthesize_citation; deterministic ordering
+    # (`sorted(added_columns)`) keeps params stable for test snapshots.
+    upstream_cols = [*light_to_emit, *heavy_to_emit, *sorted(added_columns)]
     params: list[tuple[str, str]] = [
         *filter_params,
         *sort_params,
@@ -503,6 +529,12 @@ async def query_table(
         # convention as `_policy` (Plan 06-01: HEAVY_COLUMNS += "_policy");
         # `_citation` is THE canonical key documented in core/citation.py.
         row["_citation"] = synthesize_citation(database, table, upstream_row, retrieved_at_for_call)
+        # D6.1-02: drop placeholder columns we added only for citation
+        # substitution — caller did NOT ask for them, agent must not see them
+        # at row top level. `synthesize_citation` already read them off
+        # `upstream_row` (the raw upstream dict, untouched by this pop).
+        for _c in added_columns:
+            row.pop(_c, None)
         reshaped.append(row)
 
     # Step 14: encode next cursor + surface truncation. encode_cursor binds the
@@ -709,7 +741,27 @@ async def fetch(
     row_dict = {c: first[c] for c in sorted(emit_cols) if c in first}
     # `_citation` underscore prefix avoids collision with upstream `citation`
     # columns (e.g., judgments.citation). See core/citation.py docstring.
+    # `synthesize_citation` reads from `first` (the raw upstream row, NOT
+    # `row_dict`) so it sees every column upstream returned — including any
+    # citation-template placeholder column that emit_cols may not include.
     row_dict["_citation"] = synthesize_citation(database, table, first, get_tool_started_at())
+
+    # D6.1-02 / Finding #2: defense-in-depth strip. `fetch` has no `columns=`
+    # parameter — it always emits `emit_cols = (visible - HEAVY_COLUMNS) -
+    # fk_to_exclude`. CITATION_TEMPLATES placeholders for currently-templated
+    # URL-keyed tables (judgments, enforcement_decisions, *_news, etc.) are
+    # ALWAYS subsets of LIGHT_COLUMNS, so under current config the strip is a
+    # no-op — `row_dict` already contains only emit_cols. The pop is kept as
+    # symmetry with the query_table augmentation path and as a guard against
+    # future config drift (e.g., a template referencing a column added to
+    # HEAVY_COLUMNS, which would then be in `first` but not in emit_cols and
+    # could only enter `row_dict` via an unrelated future code change).
+    fetch_template = config.CITATION_TEMPLATES.get(
+        (database, table), config.DEFAULT_CITATION_TEMPLATE
+    )
+    fetch_added_cols = placeholder_columns(fetch_template) - set(emit_cols)
+    for _c in fetch_added_cols:
+        row_dict.pop(_c, None)
 
     # Step 8: single-row envelope. No pagination — fetch never paginates.
     return Envelope.for_rows(database=database, table=table, rows=[row_dict])
