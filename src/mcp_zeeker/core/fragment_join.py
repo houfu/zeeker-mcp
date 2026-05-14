@@ -61,6 +61,7 @@ import anyio
 import structlog
 
 from mcp_zeeker import config
+from mcp_zeeker.core.config_lookup import url_column_for
 from mcp_zeeker.core.datasette_client import (
     DatasetteClient,
     UpstreamCallFailed,  # noqa: F401 — re-exported for handler-side except-bubble symmetry
@@ -293,7 +294,7 @@ async def compile_filter(
 
     # 2. Fall-through if config drift dropped the parent URL column.
     parent_table = fragment_parent["parent_table"]
-    parent_url_col = config.URL_COLUMNS.get(f"{database}.{parent_table}")
+    parent_url_col = url_column_for(database, parent_table)
     if parent_url_col is None:
         return (filters, None)
 
