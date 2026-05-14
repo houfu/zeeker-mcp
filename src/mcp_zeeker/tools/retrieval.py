@@ -355,12 +355,32 @@ async def query_table(
         added_columns = set()
 
     # Step 8: build sort param (D3-08, Datasette _sort / _sort_desc mapping)
+    #
+    # D6.1-03 / Finding #4: when the caller does NOT specify a sort, force
+    # `_sort=rowid` on the upstream request. Several upstream tables (every
+    # `sg-gov-newsrooms.*_news` table, as of 2026-05-15) have a per-table
+    # default sort configured in Datasette metadata (e.g. `mlaw_news` →
+    # `published_date desc`). When `_col=` is sent WITHOUT the implicit
+    # sort column, Datasette generates invalid SQL (`SELECT rowid,
+    # content_text FROM mlaw_news ORDER BY published_date desc` — but the
+    # parser can't compile it cleanly and returns HTTP 400 "Invalid SQL:
+    # incomplete input"). This manifested as Finding #4 — `query_table(...,
+    # columns=["content_text"])` returning `upstream_unavailable` even
+    # though the same upstream URL succeeded via curl when the default-sort
+    # column was included.
+    #
+    # `_sort=rowid` is a uniform override that works on every table (rowid
+    # is an implicit SQLite column on every non-VIEW table). For tables
+    # without a configured default sort the SQL becomes `... ORDER BY rowid`
+    # which is identical to Datasette's vanilla default order — no
+    # behavioral change. For tables with a configured default sort, the
+    # override sidesteps the invalid-SQL trap.
     if sort and sort.startswith("-"):
         sort_params: list[tuple[str, str]] = [("_sort_desc", sort.lstrip("-"))]
     elif sort:
         sort_params = [("_sort", sort)]
     else:
-        sort_params = []
+        sort_params = [("_sort", "rowid")]
 
     # Step 9: canonical shape + cursor decode (D3-03). Computed AFTER the
     # visibility checks (so unknown_column on an arbitrary cursored request
