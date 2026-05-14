@@ -13,10 +13,12 @@ Live fixtures replacing the Wave-0 stubs. Provides:
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import threading
 import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -29,6 +31,36 @@ from mcp_zeeker.app import app
 from mcp_zeeker.core.datasette_client import DatasetteClient
 from mcp_zeeker.core.metadata_cache import MetadataCache
 from mcp_zeeker.server import mcp
+
+# Phase 4 (D4-20): captured fixture directory for cross-DB search tests.
+# All 15 fixtures (12 GREEN per-table + 1 zero-hits + 1 fts-error + 1
+# ignored/pdpc) were captured against live data.zeeker.sg in research commit
+# cb645bd. Filename convention: `<db_underscored>__<table>.json` (e.g.
+# `sg_gov_newsrooms__acra_news.json` — dashes in DB names become underscores
+# to keep filenames POSIX-portable).
+_SEARCH_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "datasette" / "search"
+
+
+def _load_search_fixture(filename: str) -> dict:
+    """Load a captured per-table FTS response — Phase 4 (D4-20).
+
+    Filenames follow the `<db_underscored>__<table>.json` convention. All 15
+    fixtures captured in research commit cb645bd are reachable. Phase 4
+    search tests replay these fixtures via `httpx_mock.add_response(
+    url=..., json=_load_search_fixture(...))`.
+
+    Available fixtures (15):
+      zeeker_judgements__judgments.json (5 GREEN rows)
+      zeeker_judgements__judgments__fts_error.json (HTTP 400 body)
+      pdpc__enforcement_decisions__search_ignored.json (search_ignored: pdpc
+        has no FTS — captured response shows rowid-ordered rows)
+      sg_gov_newsrooms__acra_news.json / agc_news / ccs_news / ipos_news /
+        judiciary_news / mlaw_news / mom_news / pdpc_news (8 GREEN)
+      sg_gov_newsrooms__acra_news__zero_hits.json (empty rows)
+      sglawwatch__about_singapore_law.json / commentaries / headlines (3 GREEN)
+    """
+    return json.loads((_SEARCH_FIXTURE_DIR / filename).read_text())
+
 
 # Metadata stub for test fixtures.
 # NOTE: DB key is "Zeeker-Judgements" (mixed-case) to deliberately exercise the
@@ -108,11 +140,37 @@ def _table_url(database: str, table: str) -> str:
     return f"{base}/{database}/{table}.json"
 
 
-def _tables_payload(names: list[str]) -> dict:
-    """Build a minimal Datasette /{db}.json payload with Phase 2 optional fields."""
+def _tables_payload(
+    names: list[str],
+    *,
+    fts_tables: dict[str, str] | None = None,
+    columns: dict[str, list[str]] | None = None,
+) -> dict:
+    """Build a minimal Datasette /{db}.json payload — Phase 2 + Phase 4 fields.
+
+    Backward-compat: `_tables_payload(names)` (no kwargs) emits exactly the
+    Phase 2 shape — `fts_table=None`, `columns=[]` for every table — so all
+    Phase 1/2/3 callers continue to work unchanged.
+
+    Phase 4 kwargs (D4-02 / D4-12):
+      `fts_tables`: per-table FTS5 virtual-table name (e.g.
+        {"judgments": "judgments_fts"}). Absent entries get `fts_table=None`
+        — matches pdpc reality (no FTS index upstream).
+      `columns`: per-table column list — needed so resolve_preview_columns
+        has something to resolve against.
+    """
+    fts_tables = fts_tables or {}
+    columns = columns or {}
     return {
         "tables": [
-            {"name": n, "hidden": False, "count": None, "columns": [], "primary_keys": []}
+            {
+                "name": n,
+                "hidden": False,
+                "count": None,
+                "columns": columns.get(n, []),
+                "primary_keys": [],
+                "fts_table": fts_tables.get(n),
+            }
             for n in names
         ]
     }
@@ -127,6 +185,28 @@ TABLE_ROWS_STUB: dict = {
         {"citation": "2026 SGDC 136", "case_name": "Test v Test"},
     ],
     "columns": ["citation", "case_name"],
+    "next": None,
+    "truncated": False,
+    "filtered_table_rows_count": 1,
+}
+
+# Phase 4 (D4-20) — minimal well-formed Datasette /{db}/{table}.json?_search=...
+# response shape. Mirrors TABLE_ROWS_STUB but with preview-resolvable columns
+# (title, case_name, decision_date, summary, source_url) so resolve_preview_columns
+# can find candidates on it. Used by search stub tests to populate
+# `stub_table_rows.add_response(url=_table_url(...), json=SEARCH_ROWS_STUB)`
+# without re-declaring the full shape.
+SEARCH_ROWS_STUB: dict = {
+    "rows": [
+        {
+            "title": "Test judgment",
+            "case_name": None,
+            "decision_date": "2026-01-01",
+            "summary": "A test row from a search fixture.",
+            "source_url": "https://www.elitigation.sg/gd/s/2026_SGDC_999",
+        },
+    ],
+    "columns": ["title", "case_name", "decision_date", "summary", "source_url"],
     "next": None,
     "truncated": False,
     "filtered_table_rows_count": 1,
