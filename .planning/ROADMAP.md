@@ -162,7 +162,7 @@ Plans:
   4. `tests/test_metadata_cache.py::test_live_metadata_parseable` either updates the asserted license value to match the actual upstream (currently `"All rights reserved"` for `sg-gov-newsrooms`) OR is rewritten to assert the dual-layer model — that whatever upstream returns, the connector's `_policy` block still emits the operator-chosen content license (SODL/allowed for the gov newsrooms). Live drift probe (`ZEEKER_LIVE=1 uv run pytest -m live tests/test_metadata_cache.py -v`) is green.
 **Plans**: 1 plan
 Plans:
-- [ ] 06.1-01-PLAN.md — Gap closure: 4 findings (cold-cache license fallback, transparent citation-column augmentation, mlaw_news heavy-column upstream call, live drift probe rewrite) — 4 atomic commits
+- [x] 06.1-01-PLAN.md — Gap closure: 4 findings (cold-cache license fallback, transparent citation-column augmentation, mlaw_news heavy-column upstream call, live drift probe rewrite) — 4 atomic commits
 **UI hint**: no
 **Research flag**: none — gap closure on concrete findings; no research needed
 
