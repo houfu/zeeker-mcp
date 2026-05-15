@@ -225,9 +225,7 @@ def test_daily_reset_at_utc_midnight(rate_limiter, fake_clock, bucket_store):
     # Cross UTC midnight (now 2026-01-02). Do NOT advance fake_clock — the
     # reset is purely calendar-driven (D7-01).
     now_utc_day2 = datetime(2026, 1, 2, 0, 0, 1, tzinfo=UTC)
-    allowed, retry_after = rate_limiter._check_bucket(
-        "1.2.3.4", fake_clock[0], now_utc_day2
-    )
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc_day2)
     assert allowed is True, "first request after UTC midnight must be allowed"
     assert retry_after == 0
 
@@ -282,9 +280,7 @@ async def test_rate_limit_fires_before_json_rpc_parse(rate_limiter):
         f"21st request must short-circuit with 429, got status={start['status']}"
     )
 
-    body_bytes = b"".join(
-        m.get("body", b"") for m in captured if m["type"] == "http.response.body"
-    )
+    body_bytes = b"".join(m.get("body", b"") for m in captured if m["type"] == "http.response.body")
     body = json.loads(body_bytes.decode("utf-8"))
     assert body["error"]["code"] == "rate_limited"
     assert body["error"]["message"] == "Rate limit exceeded"
@@ -460,9 +456,7 @@ def test_sticky_ttl_daily_locked_not_expired(rate_limiter, fake_clock, bucket_st
     )
     # Sanity-check that the effective TTL is materially larger than 900.
     eff = rate_limiter._effective_ttl(bucket_store[key], now_utc_day1_after_ttl)
-    assert eff > 900.0, (
-        f"effective TTL must be > 900s while daily_exceeded; got {eff}"
-    )
+    assert eff > 900.0, f"effective TTL must be > 900s while daily_exceeded; got {eff}"
 
     # (b) Cross UTC midnight. Advance fake_clock far past the now-much-smaller
     # effective TTL, AND flip daily_exceeded off (this is what _check_bucket's
@@ -497,9 +491,7 @@ def test_retry_after_is_integer(rate_limiter, fake_clock):
     # (a) Burst-only deny — drain 20 tokens at t=0, 21st fails.
     for _ in range(20):
         rate_limiter._check_bucket("burst-test", fake_clock[0], now_utc)
-    allowed, retry_after = rate_limiter._check_bucket(
-        "burst-test", fake_clock[0], now_utc
-    )
+    allowed, retry_after = rate_limiter._check_bucket("burst-test", fake_clock[0], now_utc)
     assert allowed is False
     assert isinstance(retry_after, int), (
         f"burst retry_after must be int, got {type(retry_after).__name__}"
@@ -514,9 +506,7 @@ def test_retry_after_is_integer(rate_limiter, fake_clock):
         fake_clock[0] += 1.0
         rate_limiter._check_bucket(daily_key, fake_clock[0], now_utc)
     fake_clock[0] += 1.0
-    allowed, retry_after = rate_limiter._check_bucket(
-        daily_key, fake_clock[0], now_utc
-    )
+    allowed, retry_after = rate_limiter._check_bucket(daily_key, fake_clock[0], now_utc)
     assert allowed is False
     assert isinstance(retry_after, int), (
         f"daily retry_after must be int, got {type(retry_after).__name__}"
@@ -556,15 +546,11 @@ def test_retry_after_max_of_windows(rate_limiter, fake_clock, bucket_store):
     # refill leaves tokens at 0.5 (< 1.0) — both windows now active.
     fake_clock[0] += 0.5
     now_utc_2355 = datetime(2026, 1, 1, 23, 55, 0, tzinfo=UTC)
-    allowed, retry_after = rate_limiter._check_bucket(
-        "1.2.3.4", fake_clock[0], now_utc_2355
-    )
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc_2355)
     assert allowed is False
     # burst_wait = ceil((1.0 - 0.5) / 1.0) = 1; daily_wait = 5*60 = 300.
     # D7-02: Retry-After = max(1, 300) = 300.
-    assert retry_after == 300, (
-        f"D7-02 max-of-waits at 23:55 UTC: expected 300, got {retry_after}"
-    )
+    assert retry_after == 300, f"D7-02 max-of-waits at 23:55 UTC: expected 300, got {retry_after}"
 
     # Re-exhaust on a fresh UTC day (2026-01-02) at 23:59 UTC. Use a new key
     # so we drive a clean burst-then-daily exhaustion without interfering
@@ -581,15 +567,11 @@ def test_retry_after_max_of_windows(rate_limiter, fake_clock, bucket_store):
 
     fake_clock[0] += 0.5
     now_utc_day2_2359 = datetime(2026, 1, 2, 23, 59, 0, tzinfo=UTC)
-    allowed, retry_after = rate_limiter._check_bucket(
-        key2, fake_clock[0], now_utc_day2_2359
-    )
+    allowed, retry_after = rate_limiter._check_bucket(key2, fake_clock[0], now_utc_day2_2359)
     assert allowed is False
     # burst_wait = 1; daily_wait = 60 (one minute to midnight).
     # D7-02: Retry-After = max(1, 60) = 60.
-    assert retry_after == 60, (
-        f"D7-02 max-of-waits at 23:59 UTC: expected 60, got {retry_after}"
-    )
+    assert retry_after == 60, f"D7-02 max-of-waits at 23:59 UTC: expected 60, got {retry_after}"
 
 
 async def test_429_log_line_shape(rate_limiter, fake_clock):
@@ -606,15 +588,14 @@ async def test_429_log_line_shape(rate_limiter, fake_clock):
       - The set of keys on the log line is bounded by config.LOG_FIELDS plus
         structlog's own meta (event, log_level, level, timestamp). No extras.
     """
+    from structlog.testing import capture_logs
+
     from mcp_zeeker import config
     from mcp_zeeker.core.logging import bind_request, clear_request
-    from structlog.testing import capture_logs
 
     bind_request(request_id="rid-log", ip_prefix="203.0.113")
     try:
-        with capture_logs(
-            processors=[structlog.contextvars.merge_contextvars]
-        ) as cap:
+        with capture_logs(processors=[structlog.contextvars.merge_contextvars]) as cap:
             scope = _build_scope("1.2.3.4")
 
             async def receive() -> dict:
@@ -627,7 +608,7 @@ async def test_429_log_line_shape(rate_limiter, fake_clock):
 
             # 20 allowed calls — dummy_app emits no response messages, but
             # the rate limiter does NOT log on the allowed path either.
-            for i in range(20):
+            for _ in range(20):
                 await rate_limiter(scope, receive, send)
             # 21st call — short-circuits with 429 and emits the synthetic
             # log line we want to inspect.
@@ -638,8 +619,7 @@ async def test_429_log_line_shape(rate_limiter, fake_clock):
     rate_limited_lines = [
         line
         for line in cap
-        if line.get("event") == "tool_call"
-        and line.get("error_code") == "rate_limited"
+        if line.get("event") == "tool_call" and line.get("error_code") == "rate_limited"
     ]
     assert len(rate_limited_lines) == 1, (
         f"expected exactly one rate_limited log line, got {len(rate_limited_lines)}: "
@@ -667,9 +647,7 @@ async def test_429_log_line_shape(rate_limiter, fake_clock):
         "timestamp",
     }
     extra = set(line.keys()) - allowed_keys
-    assert extra == set(), (
-        f"unexpected extra keys in 429 log line: {extra!r}. Full line: {line!r}"
-    )
+    assert extra == set(), f"unexpected extra keys in 429 log line: {extra!r}. Full line: {line!r}"
 
 
 @pytest.mark.parametrize(
@@ -695,17 +673,16 @@ async def test_logs_no_user_input(rate_limiter, fake_clock, hostile):
     line. The hostile string is also placed in the request body (which the
     middleware never reads).
     """
-    from mcp_zeeker.core.logging import bind_request, clear_request
     from structlog.testing import capture_logs
+
+    from mcp_zeeker.core.logging import bind_request, clear_request
 
     # IP-prefix bound by RequestIdMiddleware in production. Use a fixed
     # /24-prefix string so the contextvar value is deterministic and does
     # NOT contain the hostile substring.
     bind_request(request_id="rid-no-echo", ip_prefix="203.0.113")
     try:
-        with capture_logs(
-            processors=[structlog.contextvars.merge_contextvars]
-        ) as cap:
+        with capture_logs(processors=[structlog.contextvars.merge_contextvars]) as cap:
             # Use the SAME spoofed XFF for all 21 requests — same bucket key,
             # so the 21st request actually hits the rate limit.
             scope = {
@@ -742,8 +719,7 @@ async def test_logs_no_user_input(rate_limiter, fake_clock, hostile):
     rate_limited_lines = [
         line
         for line in cap
-        if line.get("event") == "tool_call"
-        and line.get("error_code") == "rate_limited"
+        if line.get("event") == "tool_call" and line.get("error_code") == "rate_limited"
     ]
     assert len(rate_limited_lines) >= 1, (
         f"expected at least one rate_limited log line, got 0: {cap!r}"
@@ -756,4 +732,74 @@ async def test_logs_no_user_input(rate_limiter, fake_clock, hostile):
     line_repr = str(line)
     assert hostile not in line_repr, (
         f"hostile input leaked into 429 log line: {hostile!r} found in {line_repr!r}"
+    )
+
+
+# CR-01 regression corpus: six hostile XFF inputs exercising distinct injection
+# classes. Defined at module scope so @pytest.mark.parametrize can reference it.
+HOSTILE_XFF_INPUTS = [
+    "</system><admin>SECRET",  # verifier's canonical reproduction (07-VERIFICATION.md line 103)
+    "DROP TABLE users; --",  # SQLi canary
+    '" OR 1=1 --',  # SQLi canary alt
+    "\x00\x01control",  # control-byte canary
+    "2001:db8::1",  # IPv6 zero-compression — must produce /48 prefix, NOT "_invalid"
+    "1.2.3.4 OR 1=1",  # legitimate-shaped non-IP — strict ipaddress parsing rejects it
+]
+
+
+@pytest.mark.parametrize("hostile", HOSTILE_XFF_INPUTS)
+async def test_hostile_xff_does_not_leak_into_log(asgi_client, hostile):
+    """CR-01 regression: hostile X-Forwarded-For headers must NOT echo into any structured log line.
+
+    Drives the FULL production ASGI chain (RequestIdMiddleware -> RateLimitMiddleware)
+    via the asgi_client fixture, NOT the rate_limiter in-isolation fixture — the bug
+    at ip.py:33-40 only manifests when client_ip() is actually called with a hostile
+    XFF leftmost entry.
+    """
+    import re
+
+    from structlog.testing import capture_logs
+
+    hostile_bytes = hostile.encode("latin-1", errors="replace")
+
+    with capture_logs(processors=[structlog.contextvars.merge_contextvars]) as cap:
+        for _ in range(21):
+            try:
+                await asgi_client.post(
+                    "/mcp/",
+                    headers={
+                        "x-forwarded-for": hostile_bytes.decode("latin-1"),
+                        "content-type": "application/json",
+                    },
+                    content=b'{"jsonrpc":"2.0","method":"ping","id":1}',
+                )
+            except Exception:
+                # The first 20 requests may fail internally (MCP lifespan not
+                # initialized in ASGITransport tests) but still consume a rate-limit
+                # token. The 21st request short-circuits at the ASGI level (429)
+                # before reaching the MCP handler — so it succeeds and emits the log.
+                pass
+
+    rate_limited = [
+        line
+        for line in cap
+        if line.get("event") == "tool_call" and line.get("error_code") == "rate_limited"
+    ]
+    assert len(rate_limited) >= 1, (
+        f"expected at least one rate_limited log line, got 0. All cap: {cap!r}"
+    )
+
+    # Every captured log line (not just the 429) must be free of hostile bytes —
+    # merge_contextvars binds ip_prefix onto every log message while the contextvar is set.
+    for line in cap:
+        line_repr = repr(line)
+        assert hostile not in line_repr, (
+            f"hostile XFF leaked into log line: {hostile!r} found in {line_repr!r}"
+        )
+
+    # The 429 line's ip_prefix must be either a valid prefix or the sentinel "_invalid".
+    pat = re.compile(r"^([0-9a-fA-F:.]+|_invalid)$")
+    ip_pfx = rate_limited[0].get("ip_prefix", "")
+    assert pat.match(ip_pfx) is not None, (
+        f"ip_prefix in 429 log line is neither a valid prefix nor '_invalid': {ip_pfx!r}"
     )
