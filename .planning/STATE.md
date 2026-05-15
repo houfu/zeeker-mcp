@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 7 verification — gaps_found (1 BLOCKER on SC-6: CR-01 log injection)"
-last_updated: "2026-05-15T04:01:20.157Z"
-last_activity: 2026-05-15 -- Phase 8 planning complete
+last_updated: "2026-05-15T06:18:48.532Z"
+last_activity: 2026-05-15 -- Phase 08 execution started
 progress:
   total_phases: 10
   completed_phases: 8
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Every successful response is citation-ready, scope-bounded, and safe to feed back into an LLM — provenance attached, hidden internal data stripped, retrieved third-party text labeled as data rather than instructions.
-**Current focus:** Phase 07 — rate-limit-structured-errors-healthz-logs
+**Current focus:** Phase 08 — full-tests-24h-soak
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-15 -- Phase 8 planning complete
+Phase: 08 (full-tests-24h-soak) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 08
+Last activity: 2026-05-15 -- Phase 08 execution started
 
 **Resume:** Run `/gsd-plan-phase 7 --gaps` to plan a gap-closure slice (07-07) that fixes CR-01 in `src/mcp_zeeker/core/ip.py` (validate via `ipaddress.ip_address()`, sentinel for non-parseable input) and adds a regression test that drives the FULL ASGI chain. Then `/gsd-execute-phase 7 --gaps-only`. CR-02 (`tool.return_type` on Tool base) is deferred to Phase 8 per VERIFICATION.md. Phase 6 manual UAT sign-off in `tests/manual/PHASE6-CLIENT-VERIFY.md` remains UNSIGNED — separate operator gate.
 
