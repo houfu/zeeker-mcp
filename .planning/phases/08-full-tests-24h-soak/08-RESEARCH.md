@@ -1316,29 +1316,34 @@ CI minutes budget: GitHub Actions free tier gives 2,000 minutes/month for privat
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the soak harness pin a specific CI runner OS / arch?**
+   **RESOLVED:** `ubuntu-latest` for live + soak workflows; `rss_sampler.py` retains the macOS branch for local dev only.
    - What we know: GitHub Actions defaults to `ubuntu-latest` (currently 22.04, soon 24.04). `resource.getrusage().ru_maxrss` units differ between Linux (KB) and macOS (bytes).
    - What's unclear: If operator pins to macOS runners (M-series Apple Silicon), the sampling code needs the conditional branch already documented in `rss_sampler.py`. Defer to operator decision; default to `ubuntu-latest`.
    - Recommendation: document `ubuntu-latest` as the assumed runner; rss_sampler handles both for local dev.
 
 2. **Is the 1-hour smoke soak actually meaningful, or is it false-confidence?**
+   **RESOLVED:** Both retained — smoke is the per-PR gate, 24h is `workflow_dispatch` only.
    - What we know: The 24h soak validates daily-rollover (which a 1h cannot). The 1h validates burst+sustained behavior, latency stability over a non-trivial window, and absence of immediate memory leak.
    - What's unclear: If memory grows linearly at 1 MB/hour, 1h shows +1 MB (noise); 24h shows +24 MB (still under 256 MB cap). The 1h soak misses this signal.
    - Recommendation: 1h smoke is for "did the build break performance?" — early-warning. 24h pre-release is for "is the v1 deploy OK?" — gate. Both have value; document the difference clearly.
 
 3. **Does Anthropic publish a stable IP-allowlist?**
+   **RESOLVED:** Defer authoritative answer to Phase 9 submission; README documents the operator-facing requirement now (per Plan 08-06 NFR-05 delta).
    - What we know: Anthropic docs (anthropic.com/api/getting-started) reference an allowlist for outbound API calls but the list is updated periodically.
    - What's unclear: For the MCP connector direction (Anthropic → Zeeker), the relevant IPs are Anthropic's outbound MCP egress, not the inbound API. These are not (as of last check) publicly documented in a stable, machine-readable list.
    - Recommendation: Phase 8 README addition says "operator must allowlist Anthropic's MCP egress IPs (consult Anthropic ops contact)." Phase 9 submission may surface a canonical list as part of registry onboarding.
 
 4. **`pytest-httpx` version pin: bump to 0.36.x or stay at 0.35.x?**
+   **RESOLVED:** Stay on 0.35; NFR-04 dep audit treats `pytest-httpx` as one entry regardless of version.
    - What we know: `pyproject.toml:19` pins `pytest-httpx~=0.35`. CLAUDE.md mentions 0.36.2 as the latest. No Phase 8 test requires a 0.36 feature.
    - What's unclear: If Phase 8 tests want `httpx_mock.add_response(method="POST")` (added in 0.36 per release notes), a bump is needed.
    - Recommendation: stay at 0.35 unless the planner identifies a specific blocker. NFR-04 dep audit treats `pytest-httpx` as one entry regardless of version.
 
 5. **Should the soak driver retry on transient errors?**
+   **RESOLVED:** No retries; failure rate IS the measurement.
    - What we know: Real-world clients retry on 5xx and on the connector's own 502/503 (per Phase 7 retry semantics).
    - What's unclear: A retrying driver papers over upstream blips. A non-retrying driver reports honest failure rates but may flag genuinely successful runs as "unstable" if upstream had a 30-second blip.
    - Recommendation: NO retries in driver. Failure rate IS a measurement. The soak report categorizes errors (`pool_timeout`, `request_timeout`, `5xx`, `4xx`, `429`) so operators can distinguish transport from application issues.
