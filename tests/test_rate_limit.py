@@ -658,20 +658,18 @@ async def test_429_log_line_shape(rate_limiter, fake_clock):
         '" OR 1=1 --',
     ],
 )
-async def test_logs_no_user_input(rate_limiter, fake_clock, hostile):
-    """OBS-04 / INJ-05: rate-limit log line never contains body / filter values.
+async def test_rate_limit_middleware_never_reads_body_bytes(rate_limiter, fake_clock, hostile):
+    """In-isolation smoke: RateLimitMiddleware itself never reads the request
+    body and never echoes header bytes into the synthetic 429 log line when
+    the ip_prefix contextvar is already a clean /24 string.
 
-    The rate-limit middleware never parses the request body and only reads
-    headers for XFF-based IP keying. The /24-truncated `ip_prefix` (set by
-    RequestIdMiddleware upstream) is the ONLY user-influenced value that can
-    reach the log line. Hostile content (canary tokens, FTS5 operators,
-    `</system>` tokens) injected into the request body OR into headers must
-    NOT appear in the captured log line.
-
-    Drives 21 requests with the SAME hostile XFF value so a single bucket
-    accumulates 20 tokens and the 21st triggers the synthetic 429 + log
-    line. The hostile string is also placed in the request body (which the
-    middleware never reads).
+    NOTE — this test does NOT cover the OBS-04 / INJ-05 end-to-end contract.
+    It pre-binds ip_prefix='203.0.113' via bind_request() directly, sidestepping
+    RequestIdMiddleware -> client_ip -> ip_prefix. The end-to-end OBS-04 /
+    INJ-05 contract (a hostile XFF must not leak into ANY log line through
+    the FULL production ASGI chain) is owned by
+    `test_hostile_xff_does_not_leak_into_log` further down in this file.
+    See CR-01 in 07-VERIFICATION.md and WR-07 for the rationale.
     """
     from structlog.testing import capture_logs
 
