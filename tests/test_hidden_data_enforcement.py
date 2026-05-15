@@ -119,6 +119,7 @@ async def datasette_client(httpx_mock: pytest_httpx.HTTPXMock) -> DatasetteClien
         token = DatasetteClient.bind(dc)
         yield dc
         DatasetteClient.reset(token)
+        DatasetteClient.clear_singleton()  # mirrors metadata_cache teardown (WR-03)
 
 
 @pytest.fixture
