@@ -18,7 +18,7 @@ build a minimal `scope` dict + a captured-`send` pattern; concatenate
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 import structlog
@@ -123,19 +123,112 @@ async def test_429_body_has_request_id(rate_limiter, fake_clock):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (sustained refill)")
-def test_sustained_refill_after_one_second():
-    """RATE-01: token refills after 1 second of idle (sustained 1 tok/s)."""
+def test_sustained_refill_after_one_second(rate_limiter, fake_clock):
+    """RATE-01: token refills after 1 second of idle (sustained 1 tok/s).
+
+    Drain the burst (20 tokens) at fake_clock=0.0; verify the 21st call at the
+    same instant denies. Advance fake_clock to 1.0 and assert the next call
+    succeeds (one token has refilled). Advance to 2.0 and assert another
+    success — sustained 1/s holds indefinitely.
+    """
+    now_utc = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+    # Drain 20 tokens at t=0.
+    for i in range(20):
+        allowed, _ = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+        assert allowed is True, f"burst-drain request {i + 1} should be allowed"
+
+    # 21st at t=0 denies — burst is empty.
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+    assert allowed is False
+    assert retry_after == 1
+
+    # Advance to t=1.0 — exactly one token has refilled at 1 tok/s.
+    fake_clock[0] = 1.0
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+    assert allowed is True, "request at t=1.0 should be allowed (token refilled)"
+    assert retry_after == 0
+
+    # Advance to t=2.0 — another token has refilled.
+    fake_clock[0] = 2.0
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+    assert allowed is True, "request at t=2.0 should be allowed (sustained 1 tok/s)"
+    assert retry_after == 0
 
 
-@pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (daily limit)")
-def test_daily_limit_5000():
-    """RATE-01: 5001st request in same UTC day is rejected."""
+def test_daily_limit_5000(rate_limiter, fake_clock, bucket_store):
+    """RATE-01: 5001st request in same UTC day is rejected.
+
+    Drive 5000 successful calls — drain the 20-token burst at t=0, then advance
+    fake_clock by 1.0 each call so the bucket refills exactly one token in
+    lock-step. After call 5000 the daily counter is exhausted; call 5001
+    (still 2026-01-01) returns (False, retry_after) with retry_after >= 1.
+    """
+    now_utc = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+    # First 20 calls at t=0 drain the burst (no refill needed).
+    for i in range(20):
+        allowed, _ = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+        assert allowed is True, f"burst-drain request {i + 1} should be allowed"
+
+    # Calls 21..5000: advance by 1.0 each call so exactly one token refills.
+    for i in range(20, 5000):
+        fake_clock[0] += 1.0
+        allowed, _ = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+        assert allowed is True, f"sustained request {i + 1} should be allowed"
+
+    # 5001st call (still on 2026-01-01) — daily ceiling enforces deny even
+    # though the burst bucket would otherwise have a token.
+    fake_clock[0] += 1.0
+    allowed, retry_after = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc)
+    assert allowed is False, "5001st request must be denied by daily ceiling"
+    assert retry_after >= 1, f"daily-deny retry_after must be >= 1, got {retry_after}"
+
+    # Verify bucket state after rejection.
+    bucket = bucket_store["1.2.3.4"]
+    assert bucket.daily_count == 5000
+    assert bucket.daily_exceeded is True
 
 
-@pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (daily reset)")
-def test_daily_reset_at_utc_midnight():
-    """RATE-01 / D7-01: daily counter resets exactly at 00:00 UTC."""
+def test_daily_reset_at_utc_midnight(rate_limiter, fake_clock, bucket_store):
+    """RATE-01 / D7-01: daily counter resets exactly at 00:00 UTC.
+
+    Exhaust the daily ceiling on 2026-01-01 (5000 successful calls + 1 deny);
+    then call _check_bucket with now_utc on 2026-01-02 and assert the daily
+    counter has reset to 1, daily_date has advanced, and daily_exceeded is
+    False. The fake_clock is NOT advanced between the deny and the
+    post-midnight call — proving the reset is driven solely by the UTC date
+    boundary, not by elapsed monotonic time.
+    """
+    now_utc_day1 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+    # Drain burst at t=0.
+    for _ in range(20):
+        rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc_day1)
+
+    # Calls 21..5000 in lock-step refill.
+    for _ in range(20, 5000):
+        fake_clock[0] += 1.0
+        rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc_day1)
+
+    # 5001st on day 1 — denied by daily ceiling.
+    fake_clock[0] += 1.0
+    allowed, _ = rate_limiter._check_bucket("1.2.3.4", fake_clock[0], now_utc_day1)
+    assert allowed is False
+
+    # Cross UTC midnight (now 2026-01-02). Do NOT advance fake_clock — the
+    # reset is purely calendar-driven (D7-01).
+    now_utc_day2 = datetime(2026, 1, 2, 0, 0, 1, tzinfo=UTC)
+    allowed, retry_after = rate_limiter._check_bucket(
+        "1.2.3.4", fake_clock[0], now_utc_day2
+    )
+    assert allowed is True, "first request after UTC midnight must be allowed"
+    assert retry_after == 0
+
+    bucket = bucket_store["1.2.3.4"]
+    assert bucket.daily_count == 1
+    assert bucket.daily_date == date(2026, 1, 2)
+    assert bucket.daily_exceeded is False
 
 
 @pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (RATE-02 placement)")
@@ -163,9 +256,45 @@ def test_sticky_ttl_daily_locked_not_expired():
     """RATE-04 / D7-03: daily-locked buckets sticky beyond standard 15-min idle TTL."""
 
 
-@pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (Retry-After invariant)")
-def test_retry_after_is_integer():
-    """RATE-05: Retry-After header is always a positive integer string."""
+def test_retry_after_is_integer(rate_limiter, fake_clock):
+    """RATE-05: Retry-After is always a positive integer (>= 1) on every deny.
+
+    Exercises both deny paths:
+      (a) burst-only deny: 21st request after 20 immediate calls.
+      (b) daily-exhausted deny: 5001st request in the same UTC day.
+    Both must yield `isinstance(retry_after, int) and retry_after >= 1` —
+    never zero, never a float (Nyquist invariant #3 from 07-RESEARCH.md).
+    """
+    now_utc = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+    # (a) Burst-only deny — drain 20 tokens at t=0, 21st fails.
+    for _ in range(20):
+        rate_limiter._check_bucket("burst-test", fake_clock[0], now_utc)
+    allowed, retry_after = rate_limiter._check_bucket(
+        "burst-test", fake_clock[0], now_utc
+    )
+    assert allowed is False
+    assert isinstance(retry_after, int), (
+        f"burst retry_after must be int, got {type(retry_after).__name__}"
+    )
+    assert retry_after >= 1, f"burst retry_after must be >= 1, got {retry_after}"
+
+    # (b) Daily-exhausted deny — drain 5000 in lock-step on a different key.
+    daily_key = "daily-test"
+    for _ in range(20):
+        rate_limiter._check_bucket(daily_key, fake_clock[0], now_utc)
+    for _ in range(20, 5000):
+        fake_clock[0] += 1.0
+        rate_limiter._check_bucket(daily_key, fake_clock[0], now_utc)
+    fake_clock[0] += 1.0
+    allowed, retry_after = rate_limiter._check_bucket(
+        daily_key, fake_clock[0], now_utc
+    )
+    assert allowed is False
+    assert isinstance(retry_after, int), (
+        f"daily retry_after must be int, got {type(retry_after).__name__}"
+    )
+    assert retry_after >= 1, f"daily retry_after must be >= 1, got {retry_after}"
 
 
 @pytest.mark.skip(reason="Wave 0 stub — plan 07-02 GREENs this (Retry-After max)")
