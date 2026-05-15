@@ -178,7 +178,14 @@ Plans:
   4. Upstream 502/503 (not 504) is retried exactly once with 250ms + uniform(0, 250ms) jitter and surfaced as `upstream_unavailable` if the retry fails; 504 surfaces immediately without retry.
   5. `GET /healthz` returns 200 with a minimal payload without consulting `data.zeeker.sg`; upstream-health diagnostics are exposed on a separate operator-only path (e.g., `/internal/upstream-status`), not in the public surface.
   6. Structured JSON access logs emit only the locked field set (`request_id`, `tool`, `database`, `table`, `duration_ms`, `status`, `ip_prefix`, `error_code`); no row contents and no filter values appear in any log line regardless of input size.
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 07-01-PLAN.md — ASGI rate-limit middleware burst + 429 contract + Wave-0 fixtures/stubs (RATE-01/02/05)
+- [ ] 07-02-PLAN.md — Multi-window arithmetic: sustained refill + daily ceiling + UTC midnight reset + max-of-waits Retry-After (RATE-01/02/05)
+- [ ] 07-03-PLAN.md — Bucket store eviction: _sweep sticky TTL + _enforce_cap batch LRU + XFF parsing tests (RATE-03/04)
+- [ ] 07-04-PLAN.md — Canonical 11-code error catalog + ErrorEnrichmentMiddleware appending request_id (ERR-01/02/03/05)
+- [ ] 07-05-PLAN.md — Datasette retry exhaustion verification + QueryTimeoutError subclass (ERR-04)
+- [ ] 07-06-PLAN.md — /healthz contract lock + 429 log shape/no-input-echo + README single-worker + REQUIREMENTS OBS-02 deferral (RATE-06, OBS-01/03/04)
 **UI hint**: no
 **Research flag**: needs phase research — token-bucket math (burst + sustained + daily simultaneously), XFF semantics, eviction policy; recommend `/gsd-research-phase` before planning
 
@@ -225,6 +232,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Transparent fragment-parent joins | 0/TBD | Not started | - |
 | 6. Envelope hardening + injection-resistance labelling | 0/3 | Not started | - |
 | 6.1. Envelope hardening gap closure | 1/1 | Complete    | 2026-05-14 |
-| 7. Rate limit + structured errors + healthz + logs | 0/TBD | Not started | - |
+| 7. Rate limit + structured errors + healthz + logs | 0/6 | Not started | - |
 | 8. Full tests + 24h soak | 0/TBD | Not started | - |
 | 9. Submission PR to anthropics/claude-for-legal | 0/TBD | Not started | - |
