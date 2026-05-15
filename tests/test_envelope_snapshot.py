@@ -324,6 +324,23 @@ async def test_every_registered_tool_returns_envelope_with_correct_provenance(
             f"tool '{tool.name}': retrieved_at not frozen "
             f"({observed_iso} not in {{{frozen_iso_plus!r}, {frozen_iso_z!r}}})"
         )
+        # TEST-03: per-row row-key partition assertion.
+        # Only applies to list-of-dicts data envelopes; describe_table returns
+        # a single dict ({"name": ..., "columns": [...], ...}) whose keys are
+        # never heavy columns by construction — skip per-row iteration for it.
+        if isinstance(envelope.get("data"), list):
+            for row in envelope["data"]:
+                leaked_top = set(row.keys()) & config.HEAVY_COLUMNS
+                assert not leaked_top, (
+                    f"TEST-03 leak: tool={tool.name!r} top-level row keys "
+                    f"intersect HEAVY_COLUMNS: {leaked_top!r}"
+                )
+                if "retrieved_content" in row:
+                    rc_extra = set(row["retrieved_content"].keys()) - config.HEAVY_COLUMNS
+                    assert not rc_extra, (
+                        f"TEST-03 leak: tool={tool.name!r} retrieved_content carries "
+                        f"non-HEAVY keys: {rc_extra!r}"
+                    )
         # (d) license posture
         lic = envelope["provenance"]["license"]
         if tool.name in ("list_databases", "search"):
