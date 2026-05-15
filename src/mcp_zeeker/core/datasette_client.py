@@ -159,9 +159,22 @@ class DatasetteClient:
             except httpx.RequestError as exc:
                 # D-16: no retry on transport errors in Phase 1
                 raise UpstreamCallFailed(str(exc)) from exc
-            if resp.status_code in (502, 503) and attempt == 0:
-                await asyncio.sleep(0.25 + random.random() * 0.25)
-                continue
+            if resp.status_code in (502, 503):
+                if attempt == 0:
+                    await asyncio.sleep(0.25 + random.random() * 0.25)
+                    continue
+                # ERR-04 / 07-05: second-attempt 502/503 — retry exhausted.
+                # The "retry exhausted" marker lets callers (and tests)
+                # disambiguate a fresh-failure UpstreamCallFailed from an
+                # exhaustion-after-one-retry UpstreamCallFailed without
+                # re-deriving the attempt count. The post-loop raise below
+                # remains as a defensive belt-and-suspenders for the (now
+                # unreachable) case of `for attempt in (0, 1)` falling
+                # through without either branch firing.
+                raise UpstreamCallFailed(
+                    f"upstream retry exhausted on {url}",
+                    status=resp.status_code,
+                )
             if resp.status_code == 504:
                 # D4-09 / 04-RESEARCH §3.7: pass status so the search
                 # orchestrator can distinguish 5xx (upstream_unavailable)
