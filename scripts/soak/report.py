@@ -68,9 +68,22 @@ def _load_latency(path: Path) -> tuple[list[float], collections.Counter]:
     return durations_ms, errors
 
 
-def _load_rss(path: Path) -> list[int]:
-    """Parse rss.csv and return list of rss_kb values."""
+def _load_rss(path: Path) -> tuple[list[int], int]:
+    """Parse rss.csv and return (valid_rss_kb_values, sentinel_count).
+
+    Sentinel handling: run_soak.py writes `-1` when a remote
+    `/admin/metrics` poll fails (network blip, server unreachable,
+    endpoint broken). Those rows are NOT valid measurements — including
+    them in `max()` would silently pass NFR-03 with garbage data.
+
+    We split the CSV into two channels:
+      values:         non-negative readings (real samples).
+      sentinel_count: count of `-1` rows — surfaced in the report so a
+                      run with no real RSS data is visibly broken, not
+                      silently green.
+    """
     values: list[int] = []
+    sentinel_count = 0
     with path.open(newline="") as f:
         reader = csv.reader(f)
         for i, row in enumerate(reader):
@@ -79,10 +92,14 @@ def _load_rss(path: Path) -> list[int]:
             if len(row) < 2:
                 continue
             try:
-                values.append(int(float(row[1])))
+                v = int(float(row[1]))
             except (ValueError, IndexError):
                 continue
-    return values
+            if v < 0:
+                sentinel_count += 1
+                continue
+            values.append(v)
+    return values, sentinel_count
 
 
 def _detect_daily_rollover(latency_csv_path: Path) -> tuple[bool, str]:
@@ -240,7 +257,10 @@ def main() -> int:
         )
         return 1
     durations_ms, errors = _load_latency(latency_path)
-    rss_kb = _load_rss(rss_path) if rss_path.exists() else []
+    if rss_path.exists():
+        rss_kb, rss_sentinel_count = _load_rss(rss_path)
+    else:
+        rss_kb, rss_sentinel_count = [], 0
 
     # Compute metrics
     p50_ms = _percentile(durations_ms, 0.50)
@@ -259,6 +279,18 @@ def main() -> int:
     if max_rss_mb > args.max_rss_mb:
         breaches.append(f"max_rss_mb={max_rss_mb:.1f} > limit {args.max_rss_mb}")
 
+    # NFR-03 false-pass guard: if RSS collection failed entirely (every poll
+    # returned -1 — typically because the remote /admin/metrics endpoint is
+    # unreachable or token-mismatched), there are no real samples to check
+    # against the threshold. Refuse to pass NFR-03 in that case.
+    if not rss_kb and rss_sentinel_count > 0:
+        breaches.append(
+            f"NFR-03 cannot be evaluated: 0 valid RSS samples, "
+            f"{rss_sentinel_count} failed polls "
+            f"(check SOAK_BYPASS_TOKEN parity between repo secret and prod env, "
+            f"and that mcp.zeeker.sg/admin/metrics is reachable)"
+        )
+
     # Write markdown summary
     results_dir.mkdir(parents=True, exist_ok=True)
     _write_markdown_summary(
@@ -270,6 +302,13 @@ def main() -> int:
         rollover_reason,
         breaches,
     )
+
+    if rss_sentinel_count > 0:
+        print(
+            f"WARNING: {rss_sentinel_count} RSS samples were sentinel -1 "
+            f"(failed remote polls); only {len(rss_kb)} valid samples used.",
+            file=sys.stderr,
+        )
 
     if breaches:
         print(f"BREACH: {breaches}", file=sys.stderr)
