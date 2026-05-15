@@ -1,20 +1,29 @@
 """24h soak driver for the mcp-zeeker connector — TEST-05.
 
-Drives a running mcp-zeeker server (separate uvicorn process) with a synthetic
-workload and writes per-request latency + per-minute RSS samples to CSV.
-Post-run report.py converts the CSVs to a markdown summary artifact.
+Drives a running mcp-zeeker server with a synthetic workload and writes
+per-request latency + per-minute RSS samples to CSV. Post-run report.py
+converts the CSVs to a markdown summary artifact.
 
-Usage:
-    # Terminal A — start the server (single worker — RATE-06 constraint)
-    uv run uvicorn mcp_zeeker.app:app --host 127.0.0.1 --port 8000 --workers 1
+Two run modes:
 
-    # Terminal B — start the soak driver
+  Local (against a local uvicorn for dev / smoke testing):
+    Terminal A: uv run uvicorn mcp_zeeker.app:app --host 127.0.0.1 --port 8000 --workers 1
+    Terminal B: uv run python -m scripts.soak.run_soak \\
+                  --duration 86400 --concurrency 50 \\
+                  --target-url http://127.0.0.1:8000 \\
+                  --server-pid <pid>
+
+  Remote (against production at mcp.zeeker.sg — the GHA workflow path):
+    export SOAK_BYPASS_TOKEN=<secret>
     uv run python -m scripts.soak.run_soak \\
-        --duration 86400 \\
-        --concurrency 50 \\
-        --target-url http://127.0.0.1:8000 \\
-        --out-dir ./soak-results \\
-        --rss-sample-interval 60
+        --duration 86400 --concurrency 50 \\
+        --target-url https://mcp.zeeker.sg
+
+    When SOAK_BYPASS_TOKEN is set in the environment, the driver:
+      - Sends X-Soak-Bypass: $SOAK_BYPASS_TOKEN on every tools/call request
+        (server skips rate limit for these — see core/middleware/rate_limit.py)
+      - Polls <target>/admin/metrics every --rss-sample-interval seconds for
+        the server's resident memory (see core/admin.py)
 
 NFR-01: p50 < 300ms, p95 < 1.5s (for non-fragment tools)
 NFR-02: 50 concurrent without saturation
@@ -33,12 +42,17 @@ import argparse
 import asyncio
 import csv
 import json
+import os
 import random
 import time
 from pathlib import Path
 
 import httpx
-from scripts.soak.rss_sampler import rss_kb_from_proc, rss_kb_from_self
+from scripts.soak.rss_sampler import (
+    rss_kb_from_proc,
+    rss_kb_from_remote,
+    rss_kb_from_self,
+)
 from scripts.soak.workload import WORKLOAD
 
 
@@ -72,11 +86,15 @@ async def _one_request(
     sem: asyncio.Semaphore,
     lat_writer: csv.writer,  # type: ignore[type-arg]
     rng: random.Random,
+    soak_token: str | None,
 ) -> None:
     """Send a single tool-call request, categorise the outcome, and write to lat_writer.
 
     Rows are streamed directly to latency.csv via lat_writer rather than
     buffered in memory (WR-01: unbounded list OOM risk at high 429 rates).
+
+    If soak_token is provided, X-Soak-Bypass: <token> is added to the request
+    headers — the server's rate-limit middleware skips rate-limiting for these.
 
     Error categories (per 08-RESEARCH.md Open Q5):
       pool_timeout    — httpx.PoolTimeout (connection-pool exhaustion cascade signal)
@@ -94,6 +112,8 @@ async def _one_request(
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
         }
+        if soak_token:
+            headers["x-soak-bypass"] = soak_token
         wall_ts = time.time()
         start = time.perf_counter()
         status = 0
@@ -128,17 +148,42 @@ async def _rss_sampler_loop(
     server_pid: int | None,
     interval_seconds: float,
     deadline_mono: float,
-    driver_pid_fallback: bool = False,
+    *,
+    metrics_client: httpx.AsyncClient | None = None,
+    metrics_base_url: str | None = None,
+    soak_token: str | None = None,
 ) -> None:
     """Sample RSS every interval_seconds until the soak deadline.
 
-    Prefers /proc/{server_pid}/status (Linux, accurate SUT measurement).
-    Falls back to resource.getrusage(RUSAGE_SELF) when server_pid is None
-    or /proc is unavailable — this samples the DRIVER, not the server.
-    The rss.csv header notes this when the fallback is used.
+    Preference order:
+      1. Remote /admin/metrics (when soak_token + metrics_base_url given) —
+         the accurate path for soaks against a remote production server.
+      2. /proc/{server_pid}/status (Linux, accurate SUT measurement) — local
+         soak with a separate uvicorn process.
+      3. resource.getrusage(RUSAGE_SELF) — samples the DRIVER, not the server.
+         Last-resort fallback; rss.csv header is annotated when this is used.
+
+    The remote path swallows errors and returns None on any failure (network
+    blip, server down, token rotated). When None is returned, the sample for
+    that tick is skipped rather than corrupted with a driver-self number.
     """
+    use_remote = (
+        metrics_client is not None and metrics_base_url is not None and bool(soak_token)
+    )
     while time.monotonic() < deadline_mono:
-        if server_pid is not None:
+        rss_kb: int | None
+        if use_remote:
+            rss_kb = await rss_kb_from_remote(
+                metrics_client, metrics_base_url, soak_token  # type: ignore[arg-type]
+            )
+            if rss_kb is None:
+                # Don't pollute the series with a driver-self sample when the
+                # remote path was the intent — record a sentinel so report.py
+                # can flag gaps. Using -1 keeps the CSV well-formed.
+                rss_log.append((time.time(), -1))
+                await asyncio.sleep(interval_seconds)
+                continue
+        elif server_pid is not None:
             rss_kb = rss_kb_from_proc(server_pid)
             if rss_kb is None:
                 # /proc unavailable or PID gone — fall back to driver self-measurement
@@ -156,10 +201,21 @@ async def run_soak(args: argparse.Namespace) -> None:
     with asyncio.Semaphore, runs an RSS sidecar task, and streams latency rows
     directly to latency.csv (WR-01: avoids OOM from unbounded in-memory list).
     rss.csv is written at the end (RSS samples at 60s intervals; bounded ~1440 rows).
+
+    Soak-bypass plumbing (remote / production runs):
+      - SOAK_BYPASS_TOKEN env (set by the GHA workflow) is read once here.
+      - When present, every tool-call request carries X-Soak-Bypass: <token>
+        (bypasses server rate limiter) AND the RSS sampler polls
+        <target>/admin/metrics for the server's resident memory.
+      - When absent, behaviour is unchanged from the local-uvicorn dev path.
     """
     deadline_mono = time.monotonic() + args.duration
     rss_log: list = []
     rng = random.Random(0)  # deterministic seed for reproducibility
+
+    # Read the soak token from env once. Don't pass via CLI — keeps it out of
+    # `ps` output and shell history.
+    soak_token: str | None = os.environ.get("SOAK_BYPASS_TOKEN") or None
 
     # Resolve server PID: --server-pid takes precedence over --server-pid-file
     server_pid: int | None = None
@@ -194,6 +250,9 @@ async def run_soak(args: argparse.Namespace) -> None:
                     server_pid,
                     args.rss_sample_interval,
                     deadline_mono,
+                    metrics_client=client,
+                    metrics_base_url=args.target_url,
+                    soak_token=soak_token,
                 )
             )
             try:
@@ -202,7 +261,7 @@ async def run_soak(args: argparse.Namespace) -> None:
                     # asyncio.gather runs them in parallel up to the semaphore limit.
                     await asyncio.gather(
                         *[
-                            _one_request(client, sem, lat_writer, rng)
+                            _one_request(client, sem, lat_writer, rng, soak_token)
                             for _ in range(args.concurrency)
                         ]
                     )
@@ -214,7 +273,13 @@ async def run_soak(args: argparse.Namespace) -> None:
                     pass
 
     # Write rss.csv — RSS samples at 60s intervals; max ~1440 rows over 24h (bounded).
-    rss_header_note = "rss_kb" if server_pid is not None else "rss_kb_DRIVER_NOT_SERVER"
+    # Header notes the source so report.py can interpret the series correctly.
+    if soak_token and not server_pid:
+        rss_header_note = "rss_kb_REMOTE_ADMIN_METRICS"
+    elif server_pid is not None:
+        rss_header_note = "rss_kb"
+    else:
+        rss_header_note = "rss_kb_DRIVER_NOT_SERVER"
     with (out_dir / "rss.csv").open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["wall_ts", rss_header_note])

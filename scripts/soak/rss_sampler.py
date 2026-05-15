@@ -1,7 +1,13 @@
 """RSS memory sampler for the 24h soak harness — TEST-05 / NFR-03.
 
-Pure-stdlib module: reads /proc/{pid}/status (VmRSS) on Linux, or falls back
-to resource.getrusage on macOS/other POSIX systems.
+Pure-stdlib module (plus httpx for the remote-metrics path; httpx is already
+in the locked dep set so no NFR-04 violation).
+
+Three modes:
+  - rss_kb_from_proc(pid)   — local /proc/{pid}/status read (Linux)
+  - rss_kb_from_self()      — local resource.getrusage fallback (macOS / non-Linux)
+  - rss_kb_from_remote(...) — GET <base_url>/admin/metrics with X-Soak-Bypass token,
+                              parse {"rss_kb": int} (soak against remote production)
 
 macOS vs Linux unit difference:
   Linux:  resource.ru_maxrss is in KB (cumulative-max since process start).
@@ -49,3 +55,37 @@ def rss_kb_from_self() -> int:
     if os.uname().sysname == "Darwin":
         return rusage.ru_maxrss // 1024
     return rusage.ru_maxrss
+
+
+async def rss_kb_from_remote(client, base_url: str, token: str) -> int | None:
+    """Read RSS from the server's /admin/metrics endpoint.
+
+    Used when the soak driver runs against a remote production endpoint
+    (mcp.zeeker.sg) and `/proc/{pid}/status` is unreachable.
+
+    Args:
+      client: an httpx.AsyncClient (caller owns its lifecycle)
+      base_url: base URL of the running mcp server (e.g. "https://mcp.zeeker.sg")
+      token: the SOAK_BYPASS_TOKEN value to send in X-Soak-Bypass
+
+    Returns:
+      The rss_kb integer from the JSON body, or None if:
+        - the request fails (network error, timeout)
+        - the response is non-200 (404 = token mismatch on the server)
+        - the body is malformed
+    """
+    if not token:
+        return None
+    try:
+        resp = await client.get(
+            f"{base_url.rstrip('/')}/admin/metrics",
+            headers={"X-Soak-Bypass": token},
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return None
+        body = resp.json()
+        rss = body.get("rss_kb")
+        return int(rss) if isinstance(rss, int) else None
+    except Exception:  # noqa: BLE001 — sampler must never crash the soak loop
+        return None
