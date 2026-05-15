@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Phase 7 verification — gaps_found (1 BLOCKER on SC-6: CR-01 log injection)"
+stopped_at: "Phase 8 verification — human_needed (4/5 SCs; CR-01 + CR-02 confirmed unfixed in 08-REVIEW.md)"
 last_updated: "2026-05-15T06:58:59.906Z"
-last_activity: 2026-05-15 -- Phase 08 execution started
+last_activity: 2026-05-15 -- Phase 08 verification = human_needed; HUMAN-UAT persisted
 progress:
   total_phases: 10
   completed_phases: 9
