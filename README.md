@@ -124,9 +124,45 @@ where available; this trades a lookup hop for resilience to IP churn.
 |---|---|---|
 | `UPSTREAM_URL` | `http://datasette:8001` | Base URL for upstream Datasette JSON endpoints |
 | `USER_AGENT` | `mcp-zeeker/0.1` | Outbound HTTP User-Agent identifying our connector to upstream |
+| `SOAK_BYPASS_TOKEN` | *(unset)* | Optional. When set, requests carrying `X-Soak-Bypass: <token>` skip rate limiting and `/admin/metrics` returns RSS. See "24h soak harness" below. **Leave unset in steady-state operation.** |
 
 `.env.example` ships the canonical key set. Copy to `.env` for local development; production
 uses the docker-compose `environment:` block or operator-managed secrets.
+
+### 24h soak harness — running against production
+
+The 24h soak (`.github/workflows/soak.yml`, `workflow_dispatch`) drives `https://mcp.zeeker.sg`
+with 50-concurrent synthetic load to validate NFR-01 (latency), NFR-02 (concurrency), NFR-03
+(memory) end-to-end against the real production stack: Caddy → mcp container → Datasette.
+
+To run a soak, two things must agree on the same secret:
+
+1. The repo's `SOAK_BYPASS_TOKEN` Actions secret (set under repo Settings → Secrets and
+   variables → Actions).
+2. The production container's `SOAK_BYPASS_TOKEN` env var.
+
+Generate the token once with `openssl rand -hex 32` and set both. Token rotation: pick a new
+value, update both, restart the production container, then trigger the soak.
+
+What the token does:
+
+| Surface | Without token | With matching token |
+|---|---|---|
+| Rate limit (per-IP buckets) | normal enforcement | bypassed for that request only |
+| `/admin/metrics` (RSS) | 404, empty body | `200 {"rss_kb": <int>}` |
+
+Both surfaces use the same `core/soak_auth.is_soak_authenticated` check with
+`hmac.compare_digest`. The token never appears in logs, error bodies, or scope mutations.
+
+Threat-model boundary: a leaked token grants **rate-limit bypass + RSS read-out**. It does
+**not** grant write access (there are no write paths), does not bypass hidden-data
+enforcement, does not bypass the upstream allowlist, and does not bypass injection-resistance
+labelling — all of those invariants still hold. The bypass is scoped specifically to the
+rate-limit gate and the `/admin/metrics` endpoint.
+
+**Operational rule:** in steady-state, `SOAK_BYPASS_TOKEN` is unset on the production
+container so the bypass cannot fire. Set it only for the soak window; unset (and restart)
+afterwards. Both surfaces are default-safe when the env var is absent.
 
 ## Testing
 
