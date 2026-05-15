@@ -1,16 +1,23 @@
 # .github/workflows/soak.yml
-# Source: .planning/phases/08-full-tests-24h-soak/08-RESEARCH.md "CI Scheduling" line 1172
-# Purpose: TEST-05 + NFR-01..03 — full 24h soak under 50-concurrent synthetic load.
-# Trigger: workflow_dispatch ONLY (no cron — 25h CI burn per run).
-# Sibling: .github/workflows/live-tests.yml (08-04) — copy skeleton with deltas below.
+# Purpose: TEST-05 + NFR-01..03 — full 24h soak under 50-concurrent synthetic load
+#          against the LIVE production endpoint at mcp.zeeker.sg.
 #
-# Deltas from live-tests.yml:
-#   - on: workflow_dispatch ONLY (no cron)
-#   - timeout-minutes: 1500 (25h budget)
-#   - Background-uvicorn step (live tests hit the public endpoint; soak runs locally)
-#   - Driver: --duration 86400 --concurrency 50 (full 24h at NFR-02 peak)
-#   - Report: --max-p50-ms 300 --max-p95-ms 1500 --max-rss-mb 256 (NFR-01/03 thresholds)
-#   - Artifact upload with if: always() (failures still upload diagnostic CSVs)
+# Trigger: workflow_dispatch ONLY (no cron — 25h CI burn per run + production load).
+#
+# Requirements:
+#   - Repository secret SOAK_BYPASS_TOKEN must be set; the same value must be
+#     present in the production container's environment for the run window.
+#     Production sets the env via docker-compose (env_file) and restarts the
+#     container before the soak; unsets it again after.
+#
+# Effect on production while the soak runs:
+#   - Driver sends X-Soak-Bypass: $SOAK_BYPASS_TOKEN with every request →
+#     server rate limiter is bypassed for these requests only. Other users
+#     are unaffected (their per-IP buckets are untouched).
+#   - Driver polls https://mcp.zeeker.sg/admin/metrics every 60s for RSS;
+#     same token-gating, returns 404 to anyone without the header.
+#   - The soak is a real 50-concurrent load test against production. Confirm
+#     with ops before pressing the button — this is NOT a CI dry-run.
 
 name: 24h Soak (manual)
 
@@ -31,24 +38,40 @@ jobs:
 
       - run: uv sync --frozen
 
-      - name: Start uvicorn (single worker per RATE-06)
+      - name: Preflight — production server reachable + token valid
+        env:
+          SOAK_BYPASS_TOKEN: ${{ secrets.SOAK_BYPASS_TOKEN }}
         run: |
           set -euo pipefail
-          uv run uvicorn mcp_zeeker.app:app --host 127.0.0.1 --port 8000 --workers 1 > /tmp/uvicorn.log 2>&1 &
-          echo $! > /tmp/uvicorn.pid
-          # Poll /healthz until ready (max 60 s); fail fast if server never starts.
-          for i in $(seq 1 60); do
-            curl -fsS http://127.0.0.1:8000/healthz && break || sleep 1
-          done
-          curl -fsS http://127.0.0.1:8000/healthz || { echo "ERROR: server failed to start after 60s — check /tmp/uvicorn.log"; exit 1; }
+          if [ -z "${SOAK_BYPASS_TOKEN:-}" ]; then
+            echo "ERROR: SOAK_BYPASS_TOKEN secret is not set on this workflow run."
+            echo "Add it under repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          # /healthz is unauthenticated; if this fails, the server is unreachable.
+          curl -fsS https://mcp.zeeker.sg/healthz > /dev/null \
+            || { echo "ERROR: mcp.zeeker.sg/healthz unreachable — aborting soak"; exit 1; }
+          # /admin/metrics returns 404 without the token and 200 with it.
+          # Confirm the token is correctly propagated to the production server.
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "X-Soak-Bypass: ${SOAK_BYPASS_TOKEN}" \
+            https://mcp.zeeker.sg/admin/metrics)
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: /admin/metrics returned HTTP $STATUS — token mismatch?"
+            echo "Confirm SOAK_BYPASS_TOKEN is identical in this repo's secrets"
+            echo "and in the production container's environment."
+            exit 1
+          fi
+          echo "Preflight OK — /healthz reachable, /admin/metrics authenticated."
 
-      - name: Run 24h soak
+      - name: Run 24h soak against mcp.zeeker.sg
+        env:
+          SOAK_BYPASS_TOKEN: ${{ secrets.SOAK_BYPASS_TOKEN }}
         run: |
           uv run python -m scripts.soak.run_soak \
             --duration 86400 \
             --concurrency 50 \
-            --target-url http://127.0.0.1:8000 \
-            --server-pid-file /tmp/uvicorn.pid \
+            --target-url https://mcp.zeeker.sg \
             --rss-sample-interval 60 \
             --out-dir ./soak-results
 
