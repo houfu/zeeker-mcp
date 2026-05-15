@@ -264,7 +264,7 @@ Populated by gsd-roadmapper on 2026-05-13.
 | OBS-01 | Phase 1 | Pending |
 | OBS-02 | Phase 1 | Deferred to v2 (D7-05) |
 | OBS-03 | Phase 1 | Pending |
-| OBS-04 | Phase 1 | Pending |
+| OBS-04 | Phase 1 | Satisfied (07-07 gap closure — CR-01) |
 | OBS-05 | Phase 1 | Pending |
 | CFG-01 | Phase 1 | Pending |
 | CFG-02 | Phase 1 | Pending |
