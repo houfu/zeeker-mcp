@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
+status: ready_to_plan
 stopped_at: "Phase 8 verification — human_needed (4/5 SCs; CR-01 + CR-02 confirmed unfixed in 08-REVIEW.md)"
 last_updated: "2026-05-15T06:58:59.906Z"
 last_activity: 2026-05-15 -- Phase 08 verification = human_needed; HUMAN-UAT persisted
 progress:
   total_phases: 10
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 38
   completed_plans: 38
   percent: 100
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 08 (full-tests-24h-soak) — EXECUTING
-Plan: 1 of 6
-Status: verification:human_needed
-Last activity: 2026-05-15 -- Phase 08 execution started
+Phase: 9
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-15
 
 **Resume:** Run `/gsd-plan-phase 7 --gaps` to plan a gap-closure slice (07-07) that fixes CR-01 in `src/mcp_zeeker/core/ip.py` (validate via `ipaddress.ip_address()`, sentinel for non-parseable input) and adds a regression test that drives the FULL ASGI chain. Then `/gsd-execute-phase 7 --gaps-only`. CR-02 (`tool.return_type` on Tool base) is deferred to Phase 8 per VERIFICATION.md. Phase 6 manual UAT sign-off in `tests/manual/PHASE6-CLIENT-VERIFY.md` remains UNSIGNED — separate operator gate.
 
@@ -38,7 +38,7 @@ Progress: [██████████████░░░░░░] 24/25 p
 
 **Velocity:**
 
-- Total plans completed: 29 (across phases 1–3)
+- Total plans completed: 35 (across phases 1–3)
 - Average duration: —
 - Total execution time: — hours
 
@@ -51,6 +51,7 @@ Progress: [██████████████░░░░░░] 24/25 p
 | 05 | 4 | - | - |
 | 06.1 | 1 | - | - |
 | 07 | 7 | - | - |
+| 08 | 6 | - | - |
 
 **Recent Trend:**
 
