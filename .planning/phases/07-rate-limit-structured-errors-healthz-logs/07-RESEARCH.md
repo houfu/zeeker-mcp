@@ -745,30 +745,35 @@ The following invariants must hold under adversarial conditions:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **ERR-03 request_id in ToolError envelope — implementation approach.**
    - What we know: `request_id` is bound to structlog contextvar by `RequestIdMiddleware`. `ToolError` maps to a JSON-RPC error response by FastMCP.
    - What's unclear: FastMCP's `ToolError` → JSON-RPC mapping does not automatically include `request_id`. Does the planner want a thin FastMCP middleware that enriches all error responses with `request_id`? Or include it in the message string (e.g., `"unknown_database: Database not found: foo [request_id: abc123]"`)? Neither is specified in CONTEXT.md.
    - Recommendation: Add a `ErrorEnrichmentMiddleware` (`on_call_tool` catch) that appends `request_id` from contextvars to the error's `message` field. This is the cleanest approach and does not change error code detection (which matches on the prefix before `: `).
+   - **RESOLVED in 07-04:** ErrorEnrichmentMiddleware (FastMCP-layer) catches ToolError in on_call_tool and appends '[request_id: <hex>]' to the message string using contextvar.
 
 2. **`invalid_query` and `query_timeout` raise sites — Phase 7 scope vs Phase 4 scope.**
    - What we know: REQUIREMENTS.md lists `invalid_query` under ERR-02 (Phase 7). SEARCH-06 (Phase 4) handles FTS5 escaping with `invalid_query`. Phase 4 is pending.
    - What's unclear: Should Phase 7 add the `invalid_query` raise site in `tools/search.py` even though Phase 4 is not yet implemented? Or just define the catalog entry and leave the raise site for Phase 4?
    - Recommendation: Phase 7 defines both codes in a `core/errors.py` (or inline in `core/visibility.py`) canonical location. Actual raise sites in `tools/search.py` land in Phase 4. Phase 7 verifies the code string is correct when raised.
+   - **RESOLVED in 07-04 (catalog) + 07-05 (query_timeout raise site only):** Phase 7 defines all 11 codes in core/errors.py and adds the query_timeout raise site in datasette_client._request_with_retry. The invalid_query raise site in tools/search.py is deferred to Phase 4 (where FTS5 lands).
 
 3. **`query_timeout` — how to distinguish from other `UpstreamCallFailed`.**
    - What we know: `UpstreamCallFailed` is raised for `httpx.RequestError` (which includes `httpx.TimeoutException`). Currently all map to `upstream_unavailable`.
    - What's unclear: Phase 7 should distinguish timeout from generic unavailability. The `datasette_client.py` currently doesn't catch `httpx.TimeoutException` separately.
    - Recommendation: In `_request_with_retry`, catch `httpx.TimeoutException` before `httpx.RequestError` and raise a distinct `QueryTimeoutError(UpstreamCallFailed)`. Tool handlers check for `QueryTimeoutError` and raise `ToolError("query_timeout: ...")`.
+   - **RESOLVED in 07-05:** Catch httpx.TimeoutException before httpx.RequestError in _request_with_retry; raise new QueryTimeoutError(UpstreamCallFailed) subclass; tool handlers map it to 'query_timeout' catalog code.
 
 4. **`ip_prefix` for IPv6 in rate-limit log line vs existing `ip_prefix()` function.**
    - The `ip_prefix()` function in `core/ip.py` takes first 3 groups of IPv6. The `ip_prefix` contextvar is already bound by `RequestIdMiddleware` (which calls `ip_prefix(client_ip(conn))`). The rate-limit middleware doesn't need to re-compute `ip_prefix` — it reads from the contextvar.
    - Confirmed no action needed.
+   - **RESOLVED:** No action needed. ip_prefix() in core/ip.py already handles IPv6 (first 3 groups). RequestIdMiddleware binds the ip_prefix contextvar before the rate-limit middleware runs; rate-limit reads from contextvar — no re-computation.
 
 5. **`conftest.py` additions for Phase 7 — single-plan-touch rule.**
    - Per the established pattern (observed in conftest.py comments), all conftest additions for a phase land in Plan 07-01. Plans 07-02+ must not modify conftest.py.
    - Fixtures needed: `fake_clock` (injects `time_provider` returning a controllable float), `rate_limiter` (instantiates `RateLimitMiddleware` with `fake_clock`), `bucket_store` (direct access to middleware's `_store` dict for assertion).
+   - **RESOLVED in 07-01:** Only Plan 07-01 modifies tests/conftest.py (adds fake_clock, rate_limiter, bucket_store fixtures). Plans 07-02..07-06 list tests/conftest.py only in <read_first>, not in files_modified.
 
 ---
 

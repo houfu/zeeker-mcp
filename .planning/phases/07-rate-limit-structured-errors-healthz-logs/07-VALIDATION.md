@@ -53,16 +53,16 @@ created: 2026-05-15
 | TBD | 01 | 1 | RATE-05 | — | 429 body has `retry_after_seconds` field | unit | `pytest tests/test_rate_limit.py::test_429_body_has_retry_after_seconds -x` | ❌ W0 | ⬜ pending |
 | TBD | 01 | 1 | RATE-05 | — | 429 body has `request_id` field | unit | `pytest tests/test_rate_limit.py::test_429_body_has_request_id -x` | ❌ W0 | ⬜ pending |
 | TBD | 01 | 1 | RATE-06 | — | README documents single-worker requirement | manual | N/A — doc review | N/A | ⬜ pending |
-| TBD | 02 | 1 | ERR-01 | T-07-07 (catalog drift) | All ToolErrors have stable `code: message` prefix from locked 11-code catalog | unit | `pytest tests/test_error_catalog.py::test_all_errors_have_stable_code -x` | ❌ W0 | ⬜ pending |
-| TBD | 02 | 1 | ERR-02 | — | All 11 codes exercised in catalog test | unit | `pytest tests/test_error_catalog.py::test_all_11_codes_in_catalog -x` | ❌ W0 | ⬜ pending |
-| TBD | 02 | 1 | ERR-03 | — | Error envelope includes `request_id` | unit | `pytest tests/test_error_catalog.py::test_error_includes_request_id -x` | ❌ W0 | ⬜ pending |
-| TBD | 02 | 1 | ERR-04 | — | 502 retries once with 250ms + uniform(0,250ms) jitter | unit | `pytest tests/test_datasette_client_retry.py -x` | ✅ exists | ⬜ pending |
-| TBD | 02 | 1 | ERR-04 | — | 502 twice → `upstream_unavailable` raised | unit | `pytest tests/test_datasette_client_retry.py::test_502_twice_raises -x` | ❌ W0 | ⬜ pending |
-| TBD | 02 | 1 | ERR-04 | — | 504 immediate → `upstream_unavailable` (no retry) | unit | `pytest tests/test_datasette_client_retry.py::test_504_raises_immediately -x` | ✅ exists | ⬜ pending |
-| TBD | 02 | 1 | ERR-05 | T-07-08 (upstream body echo) | Upstream 4xx → catalog code, no upstream body echo (INJ-05 preserved) | unit | `pytest tests/test_error_catalog.py::test_upstream_4xx_no_echo -x` | ❌ W0 | ⬜ pending |
-| TBD | 03 | 1 | OBS-01 | — | `/healthz` returns 200 + `{"status":"ok"}` without upstream call | unit | `pytest tests/test_app.py::test_healthz_returns_ok_without_upstream -x` | ✅ exists | ⬜ pending |
-| TBD | 03 | 1 | OBS-03 | — | 429 log line has all `LOG_FIELDS`, `tool/database/table` are null | unit | `pytest tests/test_rate_limit.py::test_429_log_line_shape -x` | ❌ W0 | ⬜ pending |
-| TBD | 03 | 1 | OBS-04 | T-07-09 (input echo in logs) | Logs never contain row contents or filter values regardless of input size | unit | `pytest tests/test_rate_limit.py::test_logs_no_user_input -x` | ❌ W0 | ⬜ pending |
+| TBD | 04 | 2 | ERR-01 | T-07-07 (catalog drift) | All ToolErrors have stable `code: message` prefix from locked 11-code catalog | unit | `pytest tests/test_error_catalog.py::test_all_errors_have_stable_code -x` | ❌ W0 | ⬜ pending |
+| TBD | 04 | 2 | ERR-02 | — | All 11 codes exercised in catalog test | unit | `pytest tests/test_error_catalog.py::test_all_11_codes_in_catalog -x` | ❌ W0 | ⬜ pending |
+| TBD | 04 | 2 | ERR-03 | — | Error envelope includes `request_id` | unit | `pytest tests/test_error_catalog.py::test_error_includes_request_id -x` | ❌ W0 | ⬜ pending |
+| TBD | 05 | 3 | ERR-04 | — | 502 retries once with 250ms + uniform(0,250ms) jitter | unit | `pytest tests/test_datasette_client_retry.py -x` | ✅ exists | ⬜ pending |
+| TBD | 05 | 3 | ERR-04 | — | 502 twice → `upstream_unavailable` raised | unit | `pytest tests/test_datasette_client_retry.py::test_502_twice_raises -x` | ❌ W0 | ⬜ pending |
+| TBD | 05 | 3 | ERR-04 | — | 504 immediate → `upstream_unavailable` (no retry) | unit | `pytest tests/test_datasette_client_retry.py::test_504_raises_immediately -x` | ✅ exists | ⬜ pending |
+| TBD | 04 | 2 | ERR-05 | T-07-08 (upstream body echo) | Upstream 4xx → catalog code, no upstream body echo (INJ-05 preserved) | unit | `pytest tests/test_error_catalog.py::test_upstream_4xx_no_echo -x` | ❌ W0 | ⬜ pending |
+| TBD | 06 | 4 | OBS-01 | — | `/healthz` returns 200 + `{"status":"ok"}` without upstream call | unit | `pytest tests/test_app.py::test_healthz_returns_ok_without_upstream -x` | ✅ exists | ⬜ pending |
+| TBD | 06 | 4 | OBS-03 | — | 429 log line has all `LOG_FIELDS`, `tool/database/table` are null | unit | `pytest tests/test_rate_limit.py::test_429_log_line_shape -x` | ❌ W0 | ⬜ pending |
+| TBD | 06 | 4 | OBS-04 | T-07-09 (input echo in logs) | Logs never contain row contents or filter values regardless of input size | unit | `pytest tests/test_rate_limit.py::test_logs_no_user_input -x` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
