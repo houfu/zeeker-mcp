@@ -41,6 +41,21 @@ class UpstreamCallFailed(Exception):
         self.status = status
 
 
+class QueryTimeoutError(UpstreamCallFailed):
+    """Raised when httpx.TimeoutException is caught inside _request_with_retry.
+
+    Subclass of UpstreamCallFailed so existing handlers that catch
+    UpstreamCallFailed continue to work; tool handlers can distinguish via
+    isinstance(exc, QueryTimeoutError) and emit the `query_timeout` catalog
+    code (per core/errors.py — see raise_query_timeout). Phase 7 plan 07-05
+    (ERR-04 / RESEARCH.md Open Question #3): the only Phase-7-owned raise
+    site for `query_timeout`; the Phase-4-owned `invalid_query` raise sites
+    in tools/search.py remain Phase 4 scope.
+    """
+
+    pass
+
+
 class TableSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")  # D-13: tolerant read of upstream JSON
 
@@ -135,6 +150,12 @@ class DatasetteClient:
         for attempt in (0, 1):
             try:
                 resp = await self._http.request(method, url, **kw)
+            # ERR-04 / Q-OPEN-3: timeouts get their own QueryTimeoutError
+            # subclass so handlers can map to `query_timeout` catalog code.
+            # httpx.TimeoutException is a subclass of httpx.RequestError, so
+            # the more-specific exception MUST be caught first.
+            except httpx.TimeoutException as exc:
+                raise QueryTimeoutError(str(exc)) from exc
             except httpx.RequestError as exc:
                 # D-16: no retry on transport errors in Phase 1
                 raise UpstreamCallFailed(str(exc)) from exc
