@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Transparent fragment-parent joins** - `query_table` on `*_fragments` tables resolves URL→parent PK→fragment FK transparently and paginates past Datasette's 1k-row cap (completed 2026-05-14, F-4 sign-off pending human walk)
 - [ ] **Phase 6: Envelope hardening + injection-resistance labelling** - Single EnvelopeBuilder is the only emission path; every tool description ends with the fixed safety trailer
 - [x] **Phase 6.1: Envelope hardening gap closure (INSERTED)** - Fix 4 manual-UAT findings on top of Phase 6: cold-cache license fallback, transparent citation-column augmentation, mlaw_news heavy-column upstream call, and live drift probe drift (completed 2026-05-14)
-- [ ] **Phase 7: Rate limit + structured errors + healthz + logs** - 20-burst/60-min/5k-24h token bucket; locked error catalog; liveness-only `/healthz`; structured JSON access logs
+- [x] **Phase 7: Rate limit + structured errors + healthz + logs** - 20-burst/60-min/5k-24h token bucket; locked error catalog; liveness-only `/healthz`; structured JSON access logs (completed 2026-05-15)
 - [ ] **Phase 8: Full tests + 24h soak** - Filter/envelope/hidden/fragment/rate-limit/error unit coverage; gated live tests against `data.zeeker.sg`; 24h soak validates p95, memory, log growth
 - [ ] **Phase 9: Submission PR to anthropics/claude-for-legal** - Public docs, privacy policy, README with 3 use cases + injection-resistance writeup, `.mcp.json` entry mimicking an existing merged entry character-for-character
 
@@ -185,7 +185,7 @@ Plans:
 - [x] 07-03-PLAN.md — Bucket store eviction: _sweep sticky TTL + _enforce_cap batch LRU + XFF parsing tests (RATE-03/04)
 - [x] 07-04-PLAN.md — Canonical 11-code error catalog + ErrorEnrichmentMiddleware appending request_id (ERR-01/02/03/05)
 - [x] 07-05-PLAN.md — Datasette retry exhaustion verification + QueryTimeoutError subclass (ERR-04)
-- [ ] 07-06-PLAN.md — /healthz contract lock + 429 log shape/no-input-echo + README single-worker + REQUIREMENTS OBS-02 deferral (RATE-06, OBS-01/03/04)
+- [x] 07-06-PLAN.md — /healthz contract lock + 429 log shape/no-input-echo + README single-worker + REQUIREMENTS OBS-02 deferral (RATE-06, OBS-01/03/04)
 **UI hint**: no
 **Research flag**: needs phase research — token-bucket math (burst + sustained + daily simultaneously), XFF semantics, eviction policy; recommend `/gsd-research-phase` before planning
 
@@ -232,6 +232,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Transparent fragment-parent joins | 0/TBD | Not started | - |
 | 6. Envelope hardening + injection-resistance labelling | 0/3 | Not started | - |
 | 6.1. Envelope hardening gap closure | 1/1 | Complete    | 2026-05-14 |
-| 7. Rate limit + structured errors + healthz + logs | 5/6 | In Progress|  |
+| 7. Rate limit + structured errors + healthz + logs | 6/6 | Complete   | 2026-05-15 |
 | 8. Full tests + 24h soak | 0/TBD | Not started | - |
 | 9. Submission PR to anthropics/claude-for-legal | 0/TBD | Not started | - |
