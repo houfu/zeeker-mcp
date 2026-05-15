@@ -23,9 +23,9 @@ jobs:
     timeout-minutes: 1500  # 25h budget per 08-RESEARCH.md line 1111
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39  # v3
         with:
           version: "0.11.14"  # CLAUDE.md pinned version
 
@@ -55,7 +55,7 @@ jobs:
             --max-p95-ms 1500 \
             --max-rss-mb 256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
         if: always()
         with:
           name: soak-results
