@@ -1,5 +1,5 @@
 # .github/workflows/soak.yml
-# Purpose: TEST-05 + NFR-01..03 — full 24h soak under 50-concurrent synthetic load
+# Purpose: TEST-05 + NFR-01..03 — 5h30m soak under 50-concurrent synthetic load
 #          against the LIVE production endpoint at mcp.zeeker.sg.
 #
 # Trigger: workflow_dispatch ONLY (no cron — 25h CI burn per run + production load).
@@ -18,8 +18,15 @@
 #     same token-gating, returns 404 to anyone without the header.
 #   - The soak is a real 50-concurrent load test against production. Confirm
 #     with ops before pressing the button — this is NOT a CI dry-run.
+#
+# Duration: 5h30m (19800s). Shortened from the original 24h to fit GitHub's
+# 360-minute hosted-runner job timeout. Daily-rate-limit rollover is no longer
+# observed by this run; the rate-limiter's unit tests cover the UTC-midnight
+# reset deterministically. For a literal 24h observation, run
+# `uv run python -m scripts.soak.run_soak --duration 86400 ...` on the VM
+# directly (the script's default is still 86400).
 
-name: 24h Soak (manual)
+name: Soak (5h30m, manual)
 
 on:
   workflow_dispatch:
@@ -27,7 +34,7 @@ on:
 jobs:
   soak:
     runs-on: ubuntu-latest
-    timeout-minutes: 1500  # 25h budget per 08-RESEARCH.md line 1111
+    timeout-minutes: 350  # 5h50m budget (GitHub hosted runner hard cap = 360)
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
@@ -64,12 +71,12 @@ jobs:
           fi
           echo "Preflight OK — /healthz reachable, /admin/metrics authenticated."
 
-      - name: Run 24h soak against mcp.zeeker.sg
+      - name: Run 5h30m soak against mcp.zeeker.sg
         env:
           SOAK_BYPASS_TOKEN: ${{ secrets.SOAK_BYPASS_TOKEN }}
         run: |
           uv run python -m scripts.soak.run_soak \
-            --duration 86400 \
+            --duration 19800 \
             --concurrency 50 \
             --target-url https://mcp.zeeker.sg \
             --rss-sample-interval 60 \
