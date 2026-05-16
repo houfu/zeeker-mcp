@@ -77,7 +77,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- **Restrict cross-DB search fan-out from client-side control** (captured 2026-05-17). Today `search()` fans out across all four `ALLOWED_DATABASES` per call. As we add more databases this fan-out will grow linearly and the c=1 expensive-tool p95 (already 5.3 s at 4 DBs, per `soak-evidence-2026-05-16/low-concurrency-probe/probe-summary.md`) will scale with it. Options to evaluate when planned: (a) require an explicit `databases:` argument on `search()` so clients opt into the set rather than implicit-all, (b) cap the per-call fan-out width with a server-side default + override, (c) add a separate `search_one(database, ...)` for single-DB and reserve `search()` for the rare multi-DB case. Decision deferred until the 5th database is in flight.
 
 ### Blockers/Concerns
 
