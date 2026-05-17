@@ -139,8 +139,8 @@
 - [x] **SUB-02**: Privacy policy published at a stable URL
 - [x] **SUB-03**: README includes three concrete LLM use cases tied to the target plugin's purpose
 - [x] **SUB-04**: README includes an injection-resistance writeup
-- [ ] **SUB-05**: PR opened to `anthropics/claude-for-legal` adding a `.mcp.json` entry to at least one plugin (target: `regulatory-legal` first)
-- [ ] **SUB-06**: `.mcp.json` entry formatted character-for-character against an existing merged plugin entry
+- [x] **SUB-05**: PR opened to `anthropics/claude-for-legal` adding a `.mcp.json` entry to at least one plugin (target: `regulatory-legal` first) *(opened by operator 2026-05-17 — Slice E)*
+- [x] **SUB-06**: `.mcp.json` entry formatted character-for-character against an existing merged plugin entry *(6 validation gates passed pre-push; verified at PR-open time)*
 - [x] **SUB-07**: Live tests passing within last 7 days of PR submission *(pivoted 2026-05-17: replaced with `tests/manual/PHASE9-PR-PROBE.md` — a reproducible reviewer-facing probe of the **deployed** `mcp.zeeker.sg/mcp` endpoint, exercising all 6 tools end-to-end with envelope/citation/policy/TOOL_TRAILER assertions. Rationale: the nightly `live-tests.yml` CI bypasses the deployed transport and is currently blocked by a `data.zeeker.sg`-side source-IP block of Azure-eastus GH runners; the probe directly tests what a reviewer actually exercises, which is closer to what SUB-07's intent — proving the connector works as deployed — actually requires.)*
 
 ## v2 Requirements
@@ -283,8 +283,8 @@ Populated by gsd-roadmapper on 2026-05-13.
 | SUB-02 | Phase 9 | Complete |
 | SUB-03 | Phase 9 | Complete |
 | SUB-04 | Phase 9 | Complete |
-| SUB-05 | Phase 9 | Pending |
-| SUB-06 | Phase 9 | Pending |
+| SUB-05 | Phase 9 | Complete (PR open 2026-05-17; awaiting upstream merge) |
+| SUB-06 | Phase 9 | Complete (6 validation gates green; mimics merged entries) |
 | SUB-07 | Phase 9 | Complete (pivoted — see PHASE9-PR-PROBE.md) |
 
 **Coverage:**

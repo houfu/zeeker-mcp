@@ -48,3 +48,6 @@ docker-compose.override.yml
 # Never commit; upload via actions/upload-artifact instead.
 soak-results/
 soak-smoke-results/
+
+# Local-only operator documentation — never committed.
+.local/
