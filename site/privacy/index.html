@@ -774,6 +774,11 @@ user-supplied values are not present in any stored or transmitted log data.</p>
 <h2 id="2-log-retention">2. Log Retention<a class="headerlink" href="#2-log-retention" title="Permanent link">&para;</a></h2>
 <p>Log lines are retained for <strong>30 days</strong> on a rolling basis. After 30 days, log entries are
 deleted. No log data is archived beyond this window.</p>
+<p>Retention is enforced by two mechanisms on the host: the container's log output is rotated
+by the Docker daemon at a 10 MB segment size with a maximum of 30 retained segments (a
+hard upper bound on disk usage), and a daily host-side prune deletes rotated segments
+whose modification time exceeds 30 days. No log shipping (rsyslog forwarding, SIEM agents,
+file backup) is configured on the host, so log data does not leave the server.</p>
 <hr />
 <h2 id="3-third-party-data-flow">3. Third-Party Data Flow<a class="headerlink" href="#3-third-party-data-flow" title="Permanent link">&para;</a></h2>
 <p>All MCP tool calls are proxied to <code>data.zeeker.sg</code> (the upstream Datasette instance hosting

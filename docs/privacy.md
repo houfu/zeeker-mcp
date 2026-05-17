@@ -45,6 +45,12 @@ user-supplied values are not present in any stored or transmitted log data.
 Log lines are retained for **30 days** on a rolling basis. After 30 days, log entries are
 deleted. No log data is archived beyond this window.
 
+Retention is enforced by two mechanisms on the host: the container's log output is rotated
+by the Docker daemon at a 10 MB segment size with a maximum of 30 retained segments (a
+hard upper bound on disk usage), and a daily host-side prune deletes rotated segments
+whose modification time exceeds 30 days. No log shipping (rsyslog forwarding, SIEM agents,
+file backup) is configured on the host, so log data does not leave the server.
+
 ---
 
 ## 3. Third-Party Data Flow

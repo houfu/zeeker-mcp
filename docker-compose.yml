@@ -7,6 +7,7 @@ services:
   mcp:
     build: .
     container_name: zeeker-mcp
+    init: true
     environment:
       UPSTREAM_URL: http://zeeker-datasette:8001
       USER_AGENT: mcp-zeeker/0.1
@@ -14,6 +15,15 @@ services:
       - "127.0.0.1:8002:8000"
     networks: [zeeker-datasette_default]
     restart: unless-stopped
+    # Bounds log disk usage and backs the privacy-policy 30-day retention
+    # claim. At observed ~250 KB/day traffic, 30 × 10MB segments give multi-
+    # year size headroom — the time-based cap is enforced by the daily prune
+    # at /etc/cron.daily/zeeker-mcp-log-prune (installed separately as root).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "30"
 
 networks:
   zeeker-datasette_default:
