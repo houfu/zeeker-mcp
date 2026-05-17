@@ -23,14 +23,14 @@ Each request to the MCP server generates one structured log line. The logged fie
 | `table` | Table name requested (e.g. `enforcement_decisions`) |
 | `duration_ms` | Time in milliseconds from request receipt to response sent |
 | `status` | HTTP response status code (e.g. `200`, `429`, `500`) |
-| `ip_prefix` | First two octets of the caller's IP address (e.g. `203.0`) — not the full IP |
+| `ip_prefix` | Truncated IP prefix — first three octets of the caller's IPv4 address (e.g. `203.0.113`, the `/24` network), or the `/48` network base address for IPv6. The full IP address is never retained. Inputs that do not parse as a valid IP address are recorded as the fixed sentinel `_invalid` instead. |
 | `error_code` | Error code if the request failed (e.g. `rate_limited`, `unknown_table`) |
 
 **What is NOT logged:**
 
 - Filter values (the content of `filters[*].value` parameters)
 - Search query text (the `query` parameter to `search`)
-- Full IP addresses (only the first two octets are retained)
+- Full IP addresses (only a truncated network prefix is retained — `/24` for IPv4, `/48` for IPv6)
 - URLs passed to `fetch`
 - Column projection lists
 - Any other user-supplied parameter values
@@ -54,16 +54,24 @@ the Singapore legal datasets). Requests are forwarded and responses are returned
 
 - No data is sent to third parties for analytics, advertising, or tracking purposes.
 - No upstream request metadata is shared with any third party.
-- Responses from `data.zeeker.sg` are **not cached** — each tool call is a fresh upstream
-  request. No retrieved data is stored on the Zeeker server.
+- Responses from `data.zeeker.sg` to MCP tool calls (search results, table rows, fragment
+  texts, fetched URLs) are **not cached** — each tool call is a fresh upstream request,
+  and no retrieved dataset content is stored on the Zeeker server.
+- The upstream catalog at `data.zeeker.sg/-/metadata.json` (the list of databases, tables,
+  and license strings — public, non-personal) is cached in memory with a 30-minute TTL so
+  the server does not re-fetch the catalog on every tool call. This cache holds no user
+  data and no upstream dataset content.
 
 ---
 
 ## 4. Cookies and Tracking
 
-Zeeker MCP uses **no cookies**. There are no tracking pixels, session identifiers, analytics
-scripts, or user-tracking mechanisms of any kind. The server is stateless: no session state is
-maintained between requests.
+Zeeker MCP uses **no cookies**. There are no tracking pixels, analytics scripts, or
+user-tracking mechanisms of any kind. The server holds no user-identifying session state.
+
+The MCP streamable-HTTP transport may emit a protocol-level `mcp-session-id` header during
+the connection handshake; this identifier is scoped to a single transport session, is not
+tied to any user identity or account, and is not retained after the connection ends.
 
 ---
 
