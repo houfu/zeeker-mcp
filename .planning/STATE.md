@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-17)
 Phase: 9
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-05-17 - Completed quick task 260517-bki: Datasette SQL-Interrupted 400 now maps to query_timeout (was: upstream_unavailable)
+Last activity: 2026-05-17 - Completed quick task 260517-dvf: list-typed tool params now accept JSON-string forms (search.databases, query_table.filters, query_table.columns) — workaround for MCP clients that JSON.stringify structured args
 
 **Resume:** Phase 8 is complete. UAT closed with 1 passed (live tests 11/11) and 1 stability_passed_latency_breached (soak ran the full 5h30m window; stability gates green — RSS 102.7 MB, 0 PoolTimeout, 0.031% error rate; latency budget decomposed cleanly via low-concurrency probe into cheap-tools-within-budget + expensive-fan-out-tools-structurally-above-budget). Security audit SECURED with 0/32 threats open. Two operator items remain post-close, neither blocking Phase 9: (1) unset `SOAK_BYPASS_TOKEN` on the prod container + restart so the bypass surface is closed in steady state; (2) decide on PRD latency budget split (per-tool category recommended — search/fragments are intrinsically multi-RTT) vs. additional upstream Datasette capacity. Next: `/gsd-plan-phase 9` (Phase 9 is flagged for `/gsd-research-phase` first per the Blockers/Concerns list — `.mcp.json` character-for-character mimicry of an existing merged entry).
 
@@ -91,6 +91,7 @@ Recent decisions affecting current work:
 |---|-------------|------|--------|-----------|
 | 260517-0s5 | mark phase-08 HUMAN-UAT test #2 passed (live tests 11/11 green); refresh STATE.md | 2026-05-17 | 2dd5b18 | [260517-0s5-mark-phase-08-human-uat-test-2-passed-li](./quick/260517-0s5-mark-phase-08-human-uat-test-2-passed-li/) |
 | 260517-bki | fix datasette client error mapping — Datasette HTTP 400 "SQL Interrupted" now raises QueryTimeoutError → query_timeout catalog code (was: upstream_unavailable) | 2026-05-17 | 7de67ca | [260517-bki-fix-datasette-client-error-mapping-datas](./quick/260517-bki-fix-datasette-client-error-mapping-datas/) |
+| 260517-dvf | accept JSON-encoded-string forms for list-typed tool params (search.databases, query_table.filters, query_table.columns) via shared BeforeValidator — workaround for MCP clients that JSON.stringify structured args | 2026-05-17 | e8bed94 | [260517-dvf-accept-json-encoded-string-forms-for-lis](./quick/260517-dvf-accept-json-encoded-string-forms-for-lis/) |
 
 ## Deferred Items
 
