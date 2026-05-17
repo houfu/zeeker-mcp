@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 8 complete (6/6) — ready to discuss Phase 9
-last_updated: 2026-05-17T00:11:21.018Z
-last_activity: 2026-05-17 -- Phase 8 complete (UAT 1+1, security audit SECURED 0/32 open); ready to plan Phase 9
+status: planning
+stopped_at: Phase 8 complete (6/6 plans, UAT closed, security SECURED 0/32); ready to plan Phase 9
+last_updated: "2026-05-17T08:48:21.296Z"
+last_activity: "2026-05-17 - Completed quick task 260517-dvf: list-typed tool params now accept JSON-string forms (search.databases, query_table.filters, query_table.columns) — workaround for MCP clients that JSON.stringify structured args"
 progress:
   total_phases: 10
-  completed_phases: 10
-  total_plans: 38
-  completed_plans: 38
-  percent: 100
+  completed_phases: 9
+  total_plans: 43
+  completed_plans: 39
+  percent: 90
 ---
 
 # Project State
@@ -32,7 +32,7 @@ Last activity: 2026-05-17 - Completed quick task 260517-dvf: list-typed tool par
 
 **Resume:** Phase 8 is complete. UAT closed with 1 passed (live tests 11/11) and 1 stability_passed_latency_breached (soak ran the full 5h30m window; stability gates green — RSS 102.7 MB, 0 PoolTimeout, 0.031% error rate; latency budget decomposed cleanly via low-concurrency probe into cheap-tools-within-budget + expensive-fan-out-tools-structurally-above-budget). Security audit SECURED with 0/32 threats open. Two operator items remain post-close, neither blocking Phase 9: (1) unset `SOAK_BYPASS_TOKEN` on the prod container + restart so the bypass surface is closed in steady state; (2) decide on PRD latency budget split (per-tool category recommended — search/fragments are intrinsically multi-RTT) vs. additional upstream Datasette capacity. Next: `/gsd-plan-phase 9` (Phase 9 is flagged for `/gsd-research-phase` first per the Blockers/Concerns list — `.mcp.json` character-for-character mimicry of an existing merged entry).
 
-Progress: [████████████████████] 38/38 plans (100%) — milestone v1.0 covers phases 1–9 plus 6.1 insertion; phase 8 closed, phase 9 pending
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -103,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-17T06:50:00Z
+Last session: 2026-05-17T08:48:21.292Z
 Stopped at: Phase 8 complete (6/6 plans, UAT closed, security SECURED 0/32); ready to plan Phase 9
 Resume file: None

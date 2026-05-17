@@ -250,4 +250,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 6.1. Envelope hardening gap closure | 1/1 | Complete    | 2026-05-14 |
 | 7. Rate limit + structured errors + healthz + logs | 6/6 | Gaps Found  | 2026-05-15 |
 | 8. Full tests + 24h soak | 6/6 | Complete    | 2026-05-17 |
-| 9. Submission PR to anthropics/claude-for-legal | 0/TBD | Not started | - |
+| 9. Submission PR to anthropics/claude-for-legal | 1/5 | In Progress|  |

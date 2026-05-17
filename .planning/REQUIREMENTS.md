@@ -137,8 +137,8 @@
 
 - [ ] **SUB-01**: Public docs at `mcp.zeeker.sg/docs` covering: tools, parameters, error catalog, rate limits, provenance shape, injection-resistance posture
 - [ ] **SUB-02**: Privacy policy published at a stable URL
-- [ ] **SUB-03**: README includes three concrete LLM use cases tied to the target plugin's purpose
-- [ ] **SUB-04**: README includes an injection-resistance writeup
+- [x] **SUB-03**: README includes three concrete LLM use cases tied to the target plugin's purpose
+- [x] **SUB-04**: README includes an injection-resistance writeup
 - [ ] **SUB-05**: PR opened to `anthropics/claude-for-legal` adding a `.mcp.json` entry to at least one plugin (target: `regulatory-legal` first)
 - [ ] **SUB-06**: `.mcp.json` entry formatted character-for-character against an existing merged plugin entry
 - [ ] **SUB-07**: Live tests passing within last 7 days of PR submission
@@ -281,8 +281,8 @@ Populated by gsd-roadmapper on 2026-05-13.
 | TEST-06 | Phase 8 | Satisfied (08-03) |
 | SUB-01 | Phase 9 | Pending |
 | SUB-02 | Phase 9 | Pending |
-| SUB-03 | Phase 9 | Pending |
-| SUB-04 | Phase 9 | Pending |
+| SUB-03 | Phase 9 | Complete |
+| SUB-04 | Phase 9 | Complete |
 | SUB-05 | Phase 9 | Pending |
 | SUB-06 | Phase 9 | Pending |
 | SUB-07 | Phase 9 | Pending |
